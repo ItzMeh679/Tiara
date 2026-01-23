@@ -1,0 +1,17 @@
+# Render Blueprint - TimeBot Discord Bot
+# https://render.com/docs/blueprint-spec
+
+services:
+  - type: worker
+    name: timebot
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: DISCORD_TOKEN
+        sync: false
+      - key: CLIENT_ID
+        sync: false
+      - key: NODE_ENV
+        value: production
