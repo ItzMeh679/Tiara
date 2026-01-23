@@ -8,6 +8,31 @@ const {
 } = require("discord.js");
 const fs = require("fs");
 const path = require("path");
+const http = require("http");
+
+// ============================================
+// HTTP Server for Render (keeps bot alive)
+// ============================================
+const PORT = process.env.PORT || 3000;
+
+const server = http.createServer((req, res) => {
+    if (req.url === "/health" || req.url === "/") {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({
+            status: "ok",
+            bot: "TimeBot",
+            uptime: process.uptime(),
+            timestamp: new Date().toISOString()
+        }));
+    } else {
+        res.writeHead(404);
+        res.end("Not Found");
+    }
+});
+
+server.listen(PORT, () => {
+    console.log(`🌐 Health server running on port ${PORT}`);
+});
 
 const { getDefaultTimeList, generateTimeList } = require("./utils/timezones");
 const { getChart, getChartEntries, getDefaultChartId, getTimeFormat } = require("./utils/database");

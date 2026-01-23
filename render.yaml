@@ -1,13 +1,15 @@
 # Render Blueprint - TimeBot Discord Bot
+# Using Web Service (free tier) with health endpoint workaround
 # https://render.com/docs/blueprint-spec
 
 services:
-  - type: worker
+  - type: web
     name: timebot
     runtime: node
     plan: free
     buildCommand: npm install
     startCommand: npm start
+    healthCheckPath: /health
     envVars:
       - key: DISCORD_TOKEN
         sync: false
