@@ -219,8 +219,8 @@ client.on(Events.MessageCreate, async (message) => {
                         const embed = new EmbedBuilder()
                             .setColor(0x5865f2)
                             .setTitle(`🕒 ${chart.name}`)
-                            .setDescription(generateTimeList(entries, timeFormat))
-                            .setFooter({ text: "Times update in real-time" })
+                            .setDescription(generateTimeList(entries, timeFormat, 'detailed'))
+                            .setFooter({ text: "Use /time for interactive controls" })
                             .setTimestamp();
 
                         return message.reply({ embeds: [embed] });
@@ -231,8 +231,8 @@ client.on(Events.MessageCreate, async (message) => {
             // Check for custom default chart
             const timeFormat = message.guildId ? await getTimeFormat(message.guildId) : '24h';
             let title = "🕒 Current World Times";
-            let timeList = getDefaultTimeList(timeFormat);
-            let footer = "Use /chart <name> for custom charts • /add to create one";
+            let timeList = getDefaultTimeList(timeFormat, 'detailed');
+            let footer = "Use /time for interactive controls • /add to create charts";
 
             if (message.guildId) {
                 const defaultChartId = await getDefaultChartId(message.guildId);
@@ -243,8 +243,8 @@ client.on(Events.MessageCreate, async (message) => {
                         const chartInfo = await getChartById(defaultChartId);
                         if (chartInfo) {
                             title = `🕒 ${chartInfo.name}`;
-                            timeList = generateTimeList(entries, timeFormat);
-                            footer = "Use /setdefault to change • /chart <name> for others";
+                            timeList = generateTimeList(entries, timeFormat, 'detailed');
+                            footer = "Use /time for interactive controls";
                         }
                     }
                 }
