@@ -7,11 +7,16 @@
     "start": "node src/index.js",
     "deploy": "node src/deploy-commands.js"
   },
-  "keywords": ["discord", "bot", "timezone", "time"],
+  "keywords": [
+    "discord",
+    "bot",
+    "timezone",
+    "time"
+  ],
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "better-sqlite3": "^9.4.3",
+    "@supabase/supabase-js": "^2.39.3",
     "discord.js": "^14.14.1",
     "dotenv": "^16.4.1",
     "luxon": "^3.4.4"

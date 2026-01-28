@@ -475,39 +475,99 @@ const CITY_TIMEZONE_MAP = {
   "dominican republic": { label: "🇩🇴 Dominican Republic", zone: "America/Santo_Domingo" },
   "santo domingo": { label: "🇩🇴 Dominican Republic (Santo Domingo)", zone: "America/Santo_Domingo" },
 };
+/**
+ * Get day/night indicator based on hour
+ * @param {number} hour - Hour (0-23)
+ * @returns {string} Emoji indicator
+ */
+function getDayNightIndicator(hour) {
+  if (hour >= 6 && hour < 12) return "🌅"; // Morning
+  if (hour >= 12 && hour < 18) return "☀️"; // Afternoon
+  if (hour >= 18 && hour < 21) return "🌆"; // Evening
+  return "🌙"; // Night
+}
 
 /**
- * Format a single timezone entry with current time
+ * Format a single timezone entry with current time (detailed view)
  * @param {Object} entry - { label, zone }
  * @param {string} format - '12h' or '24h' (default: '24h')
- * @returns {string} Formatted string like "🇮🇳 India (Mumbai) → 22:41:03" or "10:41:03 PM"
+ * @param {boolean} showDate - Whether to show date (default: true)
+ * @returns {string} Formatted string with day/night indicator, date, and time
  */
-function formatTimeEntry(entry, format = '24h') {
+function formatTimeEntry(entry, format = '24h', showDate = true) {
+  const now = DateTime.now().setZone(entry.zone);
   const timeFormat = format === '12h' ? "h:mm:ss a" : "HH:mm:ss";
-  const time = DateTime.now().setZone(entry.zone).toFormat(timeFormat);
-  return `**${entry.label}** → \`${time}\``;
+  const time = now.toFormat(timeFormat);
+  const indicator = getDayNightIndicator(now.hour);
+  const offset = now.toFormat("ZZ"); // e.g., +05:30
+
+  if (showDate) {
+    const date = now.toFormat("ccc, LLL d"); // e.g., "Tue, Jan 28"
+    return `${indicator} **${entry.label}** (UTC${offset})\n　　${date} • \`${time}\``;
+  }
+  return `${indicator} **${entry.label}** → \`${time}\``;
+}
+
+/**
+ * Format a single timezone entry (compact view)
+ * @param {Object} entry - { label, zone }
+ * @param {string} format - '12h' or '24h'
+ * @returns {string} Compact formatted string
+ */
+function formatTimeEntryCompact(entry, format = '24h') {
+  const now = DateTime.now().setZone(entry.zone);
+  const timeFormat = format === '12h' ? "h:mm a" : "HH:mm";
+  const time = now.toFormat(timeFormat);
+  const indicator = getDayNightIndicator(now.hour);
+  return `${indicator} ${entry.label}: \`${time}\``;
 }
 
 /**
  * Generate time list from an array of timezone entries
  * @param {Array} entries - Array of { label, zone } objects
  * @param {string} format - '12h' or '24h' (default: '24h')
+ * @param {string} view - 'detailed' or 'compact' (default: 'detailed')
  * @returns {string} Formatted multi-line string
  */
-function generateTimeList(entries, format = '24h') {
+function generateTimeList(entries, format = '24h', view = 'detailed') {
   if (!entries || entries.length === 0) {
     return "*No timezones in this chart*";
   }
-  return entries.map(entry => formatTimeEntry(entry, format)).join("\n");
+  if (view === 'compact') {
+    return entries.map(entry => formatTimeEntryCompact(entry, format)).join("\n");
+  }
+  return entries.map(entry => formatTimeEntry(entry, format, true)).join("\n\n");
+}
+
+/**
+ * Generate inline fields for embed (3 per row)
+ * @param {Array} entries - Array of { label, zone } objects
+ * @param {string} format - '12h' or '24h'
+ * @returns {Array} Array of field objects for embed
+ */
+function generateInlineFields(entries, format = '24h') {
+  return entries.map(entry => {
+    const now = DateTime.now().setZone(entry.zone);
+    const timeFormat = format === '12h' ? "h:mm a" : "HH:mm";
+    const time = now.toFormat(timeFormat);
+    const indicator = getDayNightIndicator(now.hour);
+    const date = now.toFormat("LLL d");
+    return {
+      name: `${indicator} ${entry.label}`,
+      value: `\`${time}\`\n${date}`,
+      inline: true
+    };
+  });
 }
 
 /**
  * Get default time list
  * @param {string} format - '12h' or '24h' (default: '24h')
+ * @param {string} view - 'detailed' or 'compact' (default: 'detailed')
  * @returns {string} Formatted multi-line string with default timezones
  */
-function getDefaultTimeList(format = '24h') {
-  return generateTimeList(DEFAULT_TIME_ZONES, format);
+function getDefaultTimeList(format = '24h', view = 'detailed') {
+  return generateTimeList(DEFAULT_TIME_ZONES, format, view);
 }
 
 /**
@@ -521,6 +581,34 @@ function lookupCity(city) {
 }
 
 /**
+ * Search cities by partial name for autocomplete
+ * @param {string} query - Partial city name to search for
+ * @param {number} limit - Maximum number of results (default: 25)
+ * @returns {Array} Array of { name, label, zone } objects
+ */
+function searchCities(query, limit = 25) {
+  const normalized = query.toLowerCase().trim();
+  if (!normalized) {
+    // Return popular cities when no query
+    const popular = ["tokyo", "new york", "london", "paris", "dubai", "singapore", "sydney", "mumbai", "los angeles", "hong kong"];
+    return popular.map(name => ({
+      name: name,
+      label: CITY_TIMEZONE_MAP[name].label,
+      zone: CITY_TIMEZONE_MAP[name].zone
+    })).slice(0, limit);
+  }
+
+  const results = [];
+  for (const [name, info] of Object.entries(CITY_TIMEZONE_MAP)) {
+    if (name.includes(normalized) || info.label.toLowerCase().includes(normalized)) {
+      results.push({ name, label: info.label, zone: info.zone });
+      if (results.length >= limit) break;
+    }
+  }
+  return results;
+}
+
+/**
  * Get list of all available cities
  * @returns {Array} Array of city names
  */
@@ -528,12 +616,128 @@ function getAvailableCities() {
   return Object.keys(CITY_TIMEZONE_MAP).sort();
 }
 
+/**
+ * Convert a time from one timezone to another
+ * @param {string} timeStr - Time string (e.g., "3:00 PM" or "15:00")
+ * @param {string} fromZone - Source timezone
+ * @param {string} toZone - Target timezone
+ * @param {string} format - Output format '12h' or '24h'
+ * @returns {Object} { fromTime, toTime, fromDate, toDate, indicator }
+ */
+function convertTime(timeStr, fromZone, toZone, format = '24h') {
+  // Parse the input time - try both formats
+  let parsedTime;
+  const today = DateTime.now().setZone(fromZone);
+
+  // Try 12h format first
+  let match = timeStr.match(/(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(am|pm)?/i);
+  if (match) {
+    let hours = parseInt(match[1]);
+    const minutes = parseInt(match[2]);
+    const seconds = parseInt(match[3]) || 0;
+    const meridiem = match[4]?.toLowerCase();
+
+    if (meridiem === 'pm' && hours !== 12) hours += 12;
+    if (meridiem === 'am' && hours === 12) hours = 0;
+
+    parsedTime = today.set({ hour: hours, minute: minutes, second: seconds });
+  } else {
+    return null;
+  }
+
+  const converted = parsedTime.setZone(toZone);
+  const timeFormat = format === '12h' ? "h:mm a" : "HH:mm";
+
+  return {
+    fromTime: parsedTime.toFormat(timeFormat),
+    toTime: converted.toFormat(timeFormat),
+    fromDate: parsedTime.toFormat("ccc, LLL d"),
+    toDate: converted.toFormat("ccc, LLL d"),
+    indicator: getDayNightIndicator(converted.hour),
+    sameDay: parsedTime.toFormat("yyyy-MM-dd") === converted.toFormat("yyyy-MM-dd")
+  };
+}
+
+/**
+ * Get countdown to a specific time in a timezone
+ * @param {string} timeStr - Target time (e.g., "3:00 PM")
+ * @param {string} zone - Timezone
+ * @returns {Object} { hours, minutes, seconds, isPast, targetTime }
+ */
+function getCountdown(timeStr, zone) {
+  const now = DateTime.now().setZone(zone);
+
+  let match = timeStr.match(/(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(am|pm)?/i);
+  if (!match) return null;
+
+  let hours = parseInt(match[1]);
+  const minutes = parseInt(match[2]);
+  const seconds = parseInt(match[3]) || 0;
+  const meridiem = match[4]?.toLowerCase();
+
+  if (meridiem === 'pm' && hours !== 12) hours += 12;
+  if (meridiem === 'am' && hours === 12) hours = 0;
+
+  let target = now.set({ hour: hours, minute: minutes, second: seconds });
+
+  // If target is in the past, move to tomorrow
+  if (target < now) {
+    target = target.plus({ days: 1 });
+  }
+
+  const diff = target.diff(now, ['hours', 'minutes', 'seconds']);
+
+  return {
+    hours: Math.floor(diff.hours),
+    minutes: Math.floor(diff.minutes),
+    seconds: Math.floor(diff.seconds),
+    targetTime: target.toFormat("h:mm a"),
+    targetDate: target.toFormat("ccc, LLL d"),
+    isPast: false
+  };
+}
+
+/**
+ * Format a scheduled time across multiple timezones
+ * @param {string} timeStr - Time string
+ * @param {string} sourceZone - Source timezone
+ * @param {Array} entries - Array of { label, zone } to show
+ * @param {string} format - '12h' or '24h'
+ * @returns {Array} Array of formatted time entries
+ */
+function formatScheduledTime(timeStr, sourceZone, entries, format = '24h') {
+  const results = [];
+
+  for (const entry of entries) {
+    const converted = convertTime(timeStr, sourceZone, entry.zone, format);
+    if (converted) {
+      results.push({
+        label: entry.label,
+        zone: entry.zone,
+        time: converted.toTime,
+        date: converted.toDate,
+        indicator: converted.indicator,
+        sameDay: converted.sameDay
+      });
+    }
+  }
+
+  return results;
+}
+
 module.exports = {
   DEFAULT_TIME_ZONES,
   CITY_TIMEZONE_MAP,
   formatTimeEntry,
+  formatTimeEntryCompact,
   generateTimeList,
+  generateInlineFields,
   getDefaultTimeList,
+  getDayNightIndicator,
   lookupCity,
   getAvailableCities,
+  searchCities,
+  convertTime,
+  getCountdown,
+  formatScheduledTime,
 };

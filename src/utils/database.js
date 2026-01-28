@@ -1,70 +1,47 @@
-const Database = require("better-sqlite3");
-const path = require("path");
+const { createClient } = require("@supabase/supabase-js");
 
-// Initialize database
-const dbPath = path.join(__dirname, "..", "..", "timebot.db");
-const db = new Database(dbPath);
+// Initialize Supabase client
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_KEY;
 
-// Create tables if they don't exist
-db.exec(`
-  CREATE TABLE IF NOT EXISTS charts (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,
-    guild_id TEXT NOT NULL,
-    created_by TEXT NOT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(name, guild_id)
-  );
-
-  CREATE TABLE IF NOT EXISTS chart_entries (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    chart_id INTEGER NOT NULL,
-    label TEXT NOT NULL,
-    timezone TEXT NOT NULL,
-    added_by TEXT NOT NULL,
-    added_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (chart_id) REFERENCES charts(id) ON DELETE CASCADE,
-    UNIQUE(chart_id, timezone)
-  );
-
-  CREATE TABLE IF NOT EXISTS guild_settings (
-    guild_id TEXT PRIMARY KEY,
-    default_chart_id INTEGER,
-    time_format TEXT DEFAULT '24h',
-    FOREIGN KEY (default_chart_id) REFERENCES charts(id) ON DELETE SET NULL
-  );
-`);
-
-// Migration: Add time_format column if it doesn't exist
-try {
-  db.exec(`ALTER TABLE guild_settings ADD COLUMN time_format TEXT DEFAULT '24h'`);
-} catch (e) {
-  // Column already exists, ignore error
+if (!supabaseUrl || !supabaseKey) {
+  console.error("❌ Error: SUPABASE_URL and SUPABASE_KEY must be set in .env file!");
+  console.log("\n📝 Setup Instructions:");
+  console.log("1. Go to https://supabase.com and create a new project");
+  console.log("2. Go to Project Settings > API");
+  console.log("3. Copy the Project URL and anon key to .env file");
+  process.exit(1);
 }
+
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 /**
  * Set the default chart for a guild
  * @param {string} guildId - Discord guild ID
  * @param {number|null} chartId - Chart ID or null to reset
  */
-function setDefaultChart(guildId, chartId) {
-  db.prepare(`
-    INSERT INTO guild_settings (guild_id, default_chart_id)
-    VALUES (?, ?)
-    ON CONFLICT(guild_id) DO UPDATE SET default_chart_id = excluded.default_chart_id
-  `).run(guildId, chartId);
+async function setDefaultChart(guildId, chartId) {
+  const { error } = await supabase
+    .from("guild_settings")
+    .upsert({ guild_id: guildId, default_chart_id: chartId }, { onConflict: "guild_id" });
+
+  if (error) throw error;
 }
 
 /**
  * Get the default chart ID for a guild
  * @param {string} guildId - Discord guild ID
- * @returns {number|null} Chart ID or null if using built-in default
+ * @returns {Promise<number|null>} Chart ID or null if using built-in default
  */
-function getDefaultChartId(guildId) {
-  const row = db.prepare(`
-    SELECT default_chart_id FROM guild_settings WHERE guild_id = ?
-  `).get(guildId);
-  return row ? row.default_chart_id : null;
+async function getDefaultChartId(guildId) {
+  const { data, error } = await supabase
+    .from("guild_settings")
+    .select("default_chart_id")
+    .eq("guild_id", guildId)
+    .single();
+
+  if (error && error.code !== "PGRST116") throw error; // PGRST116 = no rows
+  return data?.default_chart_id || null;
 }
 
 /**
@@ -72,60 +49,90 @@ function getDefaultChartId(guildId) {
  * @param {string} name - Chart name
  * @param {string} guildId - Discord guild ID
  * @param {string} createdBy - User ID who created it
- * @returns {Object} Chart object with id, name, guild_id
+ * @returns {Promise<Object>} Chart object with id, name, guild_id
  */
-function getOrCreateChart(name, guildId, createdBy) {
+async function getOrCreateChart(name, guildId, createdBy) {
   const normalizedName = name.toLowerCase().trim();
 
   // Try to get existing chart
-  let chart = db.prepare(`
-    SELECT * FROM charts WHERE LOWER(name) = ? AND guild_id = ?
-  `).get(normalizedName, guildId);
+  const { data: existingChart, error: selectError } = await supabase
+    .from("charts")
+    .select("*")
+    .ilike("name", normalizedName)
+    .eq("guild_id", guildId)
+    .single();
 
-  if (!chart) {
-    // Create new chart
-    const result = db.prepare(`
-      INSERT INTO charts (name, guild_id, created_by) VALUES (?, ?, ?)
-    `).run(name.trim(), guildId, createdBy);
+  if (selectError && selectError.code !== "PGRST116") throw selectError;
 
-    chart = {
-      id: result.lastInsertRowid,
-      name: name.trim(),
-      guild_id: guildId,
-      created_by: createdBy
-    };
+  if (existingChart) {
+    return existingChart;
   }
 
-  return chart;
+  // Create new chart
+  const { data: newChart, error: insertError } = await supabase
+    .from("charts")
+    .insert({ name: name.trim(), guild_id: guildId, created_by: createdBy })
+    .select()
+    .single();
+
+  if (insertError) throw insertError;
+  return newChart;
 }
 
 /**
  * Get a chart by name for a guild
  * @param {string} name - Chart name
  * @param {string} guildId - Discord guild ID
- * @returns {Object|null} Chart object or null
+ * @returns {Promise<Object|null>} Chart object or null
  */
-function getChart(name, guildId) {
+async function getChart(name, guildId) {
   const normalizedName = name.toLowerCase().trim();
-  return db.prepare(`
-    SELECT * FROM charts WHERE LOWER(name) = ? AND guild_id = ?
-  `).get(normalizedName, guildId);
+  const { data, error } = await supabase
+    .from("charts")
+    .select("*")
+    .ilike("name", normalizedName)
+    .eq("guild_id", guildId)
+    .single();
+
+  if (error && error.code !== "PGRST116") throw error;
+  return data || null;
+}
+
+/**
+ * Get a chart by ID
+ * @param {number} chartId - Chart ID
+ * @returns {Promise<Object|null>} Chart object or null
+ */
+async function getChartById(chartId) {
+  const { data, error } = await supabase
+    .from("charts")
+    .select("*")
+    .eq("id", chartId)
+    .single();
+
+  if (error && error.code !== "PGRST116") throw error;
+  return data || null;
 }
 
 /**
  * Get all charts for a guild
  * @param {string} guildId - Discord guild ID
- * @returns {Array} Array of chart objects
+ * @returns {Promise<Array>} Array of chart objects with entry counts
  */
-function getAllCharts(guildId) {
-  return db.prepare(`
-    SELECT c.*, COUNT(e.id) as entry_count
-    FROM charts c
-    LEFT JOIN chart_entries e ON c.id = e.chart_id
-    WHERE c.guild_id = ?
-    GROUP BY c.id
-    ORDER BY c.name
-  `).all(guildId);
+async function getAllCharts(guildId) {
+  const { data: charts, error } = await supabase
+    .from("charts")
+    .select("*, chart_entries(count)")
+    .eq("guild_id", guildId)
+    .order("name");
+
+  if (error) throw error;
+
+  // Transform to match old format
+  return (charts || []).map(chart => ({
+    ...chart,
+    entry_count: chart.chart_entries?.[0]?.count || 0
+  }));
 }
 
 /**
@@ -134,72 +141,94 @@ function getAllCharts(guildId) {
  * @param {string} label - Display label (e.g., "🇮🇳 India (Mumbai)")
  * @param {string} timezone - IANA timezone (e.g., "Asia/Kolkata")
  * @param {string} addedBy - User ID who added it
- * @returns {Object} Result with success status
+ * @returns {Promise<Object>} Result with success status
  */
-function addChartEntry(chartId, label, timezone, addedBy) {
-  try {
-    db.prepare(`
-      INSERT INTO chart_entries (chart_id, label, timezone, added_by)
-      VALUES (?, ?, ?, ?)
-    `).run(chartId, label, timezone, addedBy);
-    return { success: true };
-  } catch (error) {
-    if (error.code === "SQLITE_CONSTRAINT_UNIQUE") {
+async function addChartEntry(chartId, label, timezone, addedBy) {
+  const { error } = await supabase
+    .from("chart_entries")
+    .insert({ chart_id: chartId, label, timezone, added_by: addedBy });
+
+  if (error) {
+    if (error.code === "23505") { // Unique constraint violation
       return { success: false, error: "This timezone is already in the chart" };
     }
     throw error;
   }
+  return { success: true };
 }
 
 /**
  * Remove a timezone entry from a chart
  * @param {number} chartId - Chart ID
  * @param {string} timezone - IANA timezone to remove
- * @returns {Object} Result with success status and changes count
+ * @returns {Promise<Object>} Result with success status and changes count
  */
-function removeChartEntry(chartId, timezone) {
-  const result = db.prepare(`
-    DELETE FROM chart_entries WHERE chart_id = ? AND timezone = ?
-  `).run(chartId, timezone);
+async function removeChartEntry(chartId, timezone) {
+  const { data, error } = await supabase
+    .from("chart_entries")
+    .delete()
+    .eq("chart_id", chartId)
+    .eq("timezone", timezone)
+    .select();
 
-  return { success: result.changes > 0, changes: result.changes };
+  if (error) throw error;
+  return { success: data && data.length > 0, changes: data?.length || 0 };
 }
 
 /**
  * Get all entries for a chart
  * @param {number} chartId - Chart ID
- * @returns {Array} Array of { label, timezone } objects
+ * @returns {Promise<Array>} Array of { label, zone } objects
  */
-function getChartEntries(chartId) {
-  return db.prepare(`
-    SELECT label, timezone as zone FROM chart_entries
-    WHERE chart_id = ?
-    ORDER BY added_at
-  `).all(chartId);
+async function getChartEntries(chartId) {
+  const { data, error } = await supabase
+    .from("chart_entries")
+    .select("label, timezone")
+    .eq("chart_id", chartId)
+    .order("added_at");
+
+  if (error) throw error;
+
+  // Transform to match old format (zone instead of timezone)
+  return (data || []).map(entry => ({
+    label: entry.label,
+    zone: entry.timezone
+  }));
 }
 
 /**
  * Delete a chart and all its entries
  * @param {number} chartId - Chart ID
- * @returns {Object} Result with success status
+ * @returns {Promise<Object>} Result with success status
  */
-function deleteChart(chartId) {
+async function deleteChart(chartId) {
   // Delete entries first (cascade should handle this, but being explicit)
-  db.prepare(`DELETE FROM chart_entries WHERE chart_id = ?`).run(chartId);
-  const result = db.prepare(`DELETE FROM charts WHERE id = ?`).run(chartId);
-  return { success: result.changes > 0 };
+  await supabase.from("chart_entries").delete().eq("chart_id", chartId);
+
+  const { data, error } = await supabase
+    .from("charts")
+    .delete()
+    .eq("id", chartId)
+    .select();
+
+  if (error) throw error;
+  return { success: data && data.length > 0 };
 }
 
 /**
  * Get the time format preference for a guild
  * @param {string} guildId - Discord guild ID
- * @returns {string} '12h' or '24h' (defaults to '24h')
+ * @returns {Promise<string>} '12h' or '24h' (defaults to '24h')
  */
-function getTimeFormat(guildId) {
-  const row = db.prepare(`
-    SELECT time_format FROM guild_settings WHERE guild_id = ?
-  `).get(guildId);
-  return row?.time_format || '24h';
+async function getTimeFormat(guildId) {
+  const { data, error } = await supabase
+    .from("guild_settings")
+    .select("time_format")
+    .eq("guild_id", guildId)
+    .single();
+
+  if (error && error.code !== "PGRST116") throw error;
+  return data?.time_format || "24h";
 }
 
 /**
@@ -207,18 +236,19 @@ function getTimeFormat(guildId) {
  * @param {string} guildId - Discord guild ID
  * @param {string} format - '12h' or '24h'
  */
-function setTimeFormat(guildId, format) {
-  db.prepare(`
-    INSERT INTO guild_settings (guild_id, time_format)
-    VALUES (?, ?)
-    ON CONFLICT(guild_id) DO UPDATE SET time_format = excluded.time_format
-  `).run(guildId, format);
+async function setTimeFormat(guildId, format) {
+  const { error } = await supabase
+    .from("guild_settings")
+    .upsert({ guild_id: guildId, time_format: format }, { onConflict: "guild_id" });
+
+  if (error) throw error;
 }
 
 module.exports = {
-  db,
+  supabase,
   getOrCreateChart,
   getChart,
+  getChartById,
   getAllCharts,
   addChartEntry,
   removeChartEntry,
@@ -229,4 +259,3 @@ module.exports = {
   getTimeFormat,
   setTimeFormat,
 };
-
