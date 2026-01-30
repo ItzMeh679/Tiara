@@ -87,8 +87,28 @@ client.on(Events.InteractionCreate, async (interaction) => {
             // Handle refresh and view change buttons
             if (customId.startsWith("refresh_time_") || customId.startsWith("view_")) {
                 const { generateTimeList, generateInlineFields, DEFAULT_TIME_ZONES } = require("./utils/timezones");
-                const { getChartEntries, getChartById, getTimeFormat } = require("./utils/database");
+                const { getChartEntries, getChartById, getTimeFormat, getUpcomingEventsForChart } = require("./utils/database");
                 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require("discord.js");
+                const { DateTime } = require("luxon");
+
+                // Helper function for event tags
+                function generateEventTags(events, timeFormat) {
+                    if (!events || events.length === 0) return null;
+                    const tags = events.slice(0, 5).map(event => {
+                        const time = DateTime.fromISO(event.event_time).setZone(event.timezone);
+                        const now = DateTime.now();
+                        const isToday = time.hasSame(now, "day");
+                        const isTomorrow = time.hasSame(now.plus({ days: 1 }), "day");
+                        let dateLabel = time.toFormat("MMM d");
+                        if (isToday) dateLabel = "Today";
+                        else if (isTomorrow) dateLabel = "Tomorrow";
+                        const timeStr = timeFormat === '12h' ? time.toFormat("h:mm a") : time.toFormat("HH:mm");
+                        return `📌 **${event.name}** • ${dateLabel} ${timeStr}`;
+                    });
+                    let result = tags.join("\n");
+                    if (events.length > 5) result += `\n_+${events.length - 5} more events..._`;
+                    return result;
+                }
 
                 let view = "detailed";
                 let chartId = null;
@@ -122,6 +142,13 @@ client.on(Events.InteractionCreate, async (interaction) => {
                     }
                 }
 
+                // Get upcoming events
+                let eventTagsStr = null;
+                if (guildId) {
+                    const upcomingEvents = await getUpcomingEventsForChart(guildId, chartId ? parseInt(chartId) : null);
+                    eventTagsStr = generateEventTags(upcomingEvents, timeFormat);
+                }
+
                 const embed = new EmbedBuilder()
                     .setColor(0x5865f2)
                     .setFooter({ text: footer })
@@ -129,10 +156,17 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
                 if (view === "grid") {
                     embed.setTitle(title);
+                    if (eventTagsStr) {
+                        embed.setDescription(eventTagsStr + "\n\n───────────────");
+                    }
                     embed.addFields(generateInlineFields(entries, timeFormat));
                 } else {
                     embed.setTitle(title);
-                    embed.setDescription(generateTimeList(entries, timeFormat, view));
+                    let desc = generateTimeList(entries, timeFormat, view);
+                    if (eventTagsStr) {
+                        desc = eventTagsStr + "\n\n───────────────\n\n" + desc;
+                    }
+                    embed.setDescription(desc);
                 }
 
                 const row = new ActionRowBuilder()

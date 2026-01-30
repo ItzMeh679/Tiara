@@ -244,6 +244,144 @@ async function setTimeFormat(guildId, format) {
   if (error) throw error;
 }
 
+// ============================================
+// Scheduled Events Functions
+// ============================================
+
+/**
+ * Add a new scheduled event
+ * @param {string} guildId - Discord guild ID
+ * @param {number|null} chartId - Chart ID or null for guild-wide
+ * @param {string} name - Event name
+ * @param {string|null} description - Optional description
+ * @param {Date} eventTime - Event time as Date object
+ * @param {string} timezone - Original timezone
+ * @param {string} createdBy - User ID who created it
+ * @returns {Promise<Object>} Created event
+ */
+async function addEvent(guildId, chartId, name, description, eventTime, timezone, createdBy) {
+  const { data, error } = await supabase
+    .from("scheduled_events")
+    .insert({
+      guild_id: guildId,
+      chart_id: chartId,
+      name,
+      description,
+      event_time: eventTime.toISOString(),
+      timezone,
+      created_by: createdBy
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * Get upcoming events for a guild
+ * @param {string} guildId - Discord guild ID
+ * @param {number|null} chartId - Optional chart filter
+ * @returns {Promise<Array>} Array of events
+ */
+async function getEvents(guildId, chartId = null) {
+  let query = supabase
+    .from("scheduled_events")
+    .select("*, charts(name)")
+    .eq("guild_id", guildId)
+    .gte("event_time", new Date().toISOString())
+    .order("event_time", { ascending: true });
+
+  if (chartId !== null) {
+    query = query.eq("chart_id", chartId);
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return data || [];
+}
+
+/**
+ * Get all events for a guild (including past)
+ * @param {string} guildId - Discord guild ID
+ * @returns {Promise<Array>} Array of events
+ */
+async function getAllEvents(guildId) {
+  const { data, error } = await supabase
+    .from("scheduled_events")
+    .select("*, charts(name)")
+    .eq("guild_id", guildId)
+    .order("event_time", { ascending: true });
+
+  if (error) throw error;
+  return data || [];
+}
+
+/**
+ * Get an event by ID
+ * @param {number} eventId - Event ID
+ * @returns {Promise<Object|null>} Event object or null
+ */
+async function getEventById(eventId) {
+  const { data, error } = await supabase
+    .from("scheduled_events")
+    .select("*, charts(name)")
+    .eq("id", eventId)
+    .single();
+
+  if (error && error.code !== "PGRST116") throw error;
+  return data || null;
+}
+
+/**
+ * Remove an event
+ * @param {number} eventId - Event ID
+ * @param {string} guildId - Guild ID for verification
+ * @returns {Promise<Object>} Result with success status
+ */
+async function removeEvent(eventId, guildId) {
+  const { data, error } = await supabase
+    .from("scheduled_events")
+    .delete()
+    .eq("id", eventId)
+    .eq("guild_id", guildId)
+    .select();
+
+  if (error) throw error;
+  return { success: data && data.length > 0, deleted: data?.[0] };
+}
+
+/**
+ * Get upcoming events for display as tags
+ * @param {string} guildId - Discord guild ID
+ * @param {number|null} chartId - Chart ID (also includes guild-wide events)
+ * @param {number} hoursAhead - How many hours ahead to look (default 168 = 1 week)
+ * @returns {Promise<Array>} Array of upcoming events
+ */
+async function getUpcomingEventsForChart(guildId, chartId = null, hoursAhead = 168) {
+  const now = new Date();
+  const futureLimit = new Date(now.getTime() + hoursAhead * 60 * 60 * 1000);
+
+  let query = supabase
+    .from("scheduled_events")
+    .select("*")
+    .eq("guild_id", guildId)
+    .gte("event_time", now.toISOString())
+    .lte("event_time", futureLimit.toISOString())
+    .order("event_time", { ascending: true });
+
+  // Get guild-wide events (chart_id is null) OR chart-specific events
+  if (chartId !== null) {
+    query = query.or(`chart_id.is.null,chart_id.eq.${chartId}`);
+  } else {
+    query = query.is("chart_id", null);
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return data || [];
+}
+
 module.exports = {
   supabase,
   getOrCreateChart,
@@ -258,4 +396,11 @@ module.exports = {
   getDefaultChartId,
   getTimeFormat,
   setTimeFormat,
+  // Event functions
+  addEvent,
+  getEvents,
+  getAllEvents,
+  getEventById,
+  removeEvent,
+  getUpcomingEventsForChart,
 };

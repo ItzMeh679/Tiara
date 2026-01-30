@@ -43,8 +43,26 @@ CREATE TABLE IF NOT EXISTS user_timezones (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Scheduled events table (for calendar/event feature)
+CREATE TABLE IF NOT EXISTS scheduled_events (
+  id SERIAL PRIMARY KEY,
+  guild_id TEXT NOT NULL,
+  chart_id INTEGER REFERENCES charts(id) ON DELETE CASCADE,  -- NULL = guild-wide event
+  name TEXT NOT NULL,
+  description TEXT,
+  event_time TIMESTAMPTZ NOT NULL,
+  timezone TEXT NOT NULL,  -- Original timezone for display
+  created_by TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_scheduled_events_guild ON scheduled_events(guild_id);
+CREATE INDEX IF NOT EXISTS idx_scheduled_events_time ON scheduled_events(event_time);
+CREATE INDEX IF NOT EXISTS idx_scheduled_events_chart ON scheduled_events(chart_id);
+
 -- Enable Row Level Security (optional but recommended)
 -- ALTER TABLE charts ENABLE ROW LEVEL SECURITY;
 -- ALTER TABLE chart_entries ENABLE ROW LEVEL SECURITY;
 -- ALTER TABLE guild_settings ENABLE ROW LEVEL SECURITY;
 -- ALTER TABLE user_timezones ENABLE ROW LEVEL SECURITY;
+-- ALTER TABLE scheduled_events ENABLE ROW LEVEL SECURITY;

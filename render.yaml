@@ -15,5 +15,9 @@ services:
         sync: false
       - key: CLIENT_ID
         sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_KEY
+        sync: false
       - key: NODE_ENV
         value: production
