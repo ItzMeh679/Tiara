@@ -31,12 +31,12 @@ function generateEventTags(events, timeFormat, chartEntries = null) {
                 chartEntries.map(e => ({ label: e.label, zone: e.zone })),
                 timeFormat
             );
-            return `📌 **${event.name}** • ${dateLabel}\n${multiTz}`;
+            return `▸ **${event.name}** · ${dateLabel}\n${multiTz}`;
         } else {
             const timeStr = timeFormat === '12h'
                 ? time.toFormat("h:mm a")
                 : time.toFormat("HH:mm");
-            return `📌 **${event.name}** • ${dateLabel} ${timeStr}`;
+            return `▸ **${event.name}** · ${dateLabel} │ \`${timeStr}\``;
         }
     });
 
@@ -138,19 +138,19 @@ module.exports = {
                 .addComponents(
                     new ButtonBuilder()
                         .setCustomId(`refresh_time_${view}_${chart.id}`)
-                        .setLabel("🔄 Refresh")
+                        .setLabel("↻ Refresh")
                         .setStyle(ButtonStyle.Secondary),
                     new ButtonBuilder()
                         .setCustomId(`view_compact_${chart.id}`)
-                        .setLabel("📱 Compact")
+                        .setLabel("◇ Compact")
                         .setStyle(view === 'compact' ? ButtonStyle.Primary : ButtonStyle.Secondary),
                     new ButtonBuilder()
                         .setCustomId(`view_detailed_${chart.id}`)
-                        .setLabel("📋 Detailed")
+                        .setLabel("◈ Detailed")
                         .setStyle(view === 'detailed' ? ButtonStyle.Primary : ButtonStyle.Secondary),
                     new ButtonBuilder()
                         .setCustomId(`view_grid_${chart.id}`)
-                        .setLabel("📊 Grid")
+                        .setLabel("▦ Grid")
                         .setStyle(view === 'grid' ? ButtonStyle.Primary : ButtonStyle.Secondary)
                 );
 

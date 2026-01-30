@@ -31,12 +31,12 @@ function generateEventTags(events, timeFormat, chartEntries = null) {
                 chartEntries.map(e => ({ label: e.label, zone: e.zone })),
                 timeFormat
             );
-            return `📌 **${event.name}** • ${dateLabel}\n${multiTz}`;
+            return `▸ **${event.name}** · ${dateLabel}\n${multiTz}`;
         } else {
             const timeStr = timeFormat === '12h'
                 ? time.toFormat("h:mm a")
                 : time.toFormat("HH:mm");
-            return `📌 **${event.name}** • ${dateLabel} ${timeStr}`;
+            return `▸ **${event.name}** · ${dateLabel} │ \`${timeStr}\``;
         }
     });
 
@@ -117,24 +117,24 @@ module.exports = {
                 embed.setDescription(desc);
             }
 
-            // Create refresh button
+            // Create button controller with aesthetic icons
             const row = new ActionRowBuilder()
                 .addComponents(
                     new ButtonBuilder()
                         .setCustomId(`refresh_time_${view}_${chartId || 'default'}`)
-                        .setLabel("🔄 Refresh")
+                        .setLabel("↻ Refresh")
                         .setStyle(ButtonStyle.Secondary),
                     new ButtonBuilder()
                         .setCustomId(`view_compact_${chartId || 'default'}`)
-                        .setLabel("📱 Compact")
+                        .setLabel("◇ Compact")
                         .setStyle(view === 'compact' ? ButtonStyle.Primary : ButtonStyle.Secondary),
                     new ButtonBuilder()
                         .setCustomId(`view_detailed_${chartId || 'default'}`)
-                        .setLabel("📋 Detailed")
+                        .setLabel("◈ Detailed")
                         .setStyle(view === 'detailed' ? ButtonStyle.Primary : ButtonStyle.Secondary),
                     new ButtonBuilder()
                         .setCustomId(`view_grid_${chartId || 'default'}`)
-                        .setLabel("📊 Grid")
+                        .setLabel("▦ Grid")
                         .setStyle(view === 'grid' ? ButtonStyle.Primary : ButtonStyle.Secondary)
                 );
 

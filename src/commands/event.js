@@ -287,12 +287,12 @@ module.exports = {
 
                 const embed = new EmbedBuilder()
                     .setColor(0x57f287)
-                    .setTitle("📅 Event Created!")
-                    .setFooter({ text: `Event ID: ${event.id} • Use /calendar to view all events` })
+                    .setTitle("▸ Event Created")
+                    .setFooter({ text: `ID: ${event.id} │ Use /calendar to view all events` })
                     .setTimestamp();
 
                 if (description) {
-                    embed.setDescription(`📝 ${description}`);
+                    embed.setDescription(description);
                 }
 
                 // If linked to a chart with entries, show multi-timezone times
@@ -307,10 +307,10 @@ module.exports = {
                     embed.addFields(
                         { name: "Event", value: name, inline: true },
                         { name: "Date", value: eventTime.toFormat("EEE, MMM d, yyyy"), inline: true },
-                        { name: "Chart", value: `📊 ${chartLabel}`, inline: true }
+                        { name: "Chart", value: `◈ ${chartLabel}`, inline: true }
                     );
                     embed.addFields({
-                        name: `🌍 Times for ${chartLabel}`,
+                        name: `Times for ${chartLabel}`,
                         value: multiTimezone,
                         inline: false
                     });
@@ -318,7 +318,7 @@ module.exports = {
                     // Guild-wide or no chart - show single timezone
                     embed.addFields(
                         { name: "Event", value: name, inline: true },
-                        { name: "When", value: eventTime.toFormat("EEE, MMM d 'at' h:mm a"), inline: true },
+                        { name: "When", value: eventTime.toFormat("EEE, MMM d │ h:mm a"), inline: true },
                         { name: "Timezone", value: cityInfo.label, inline: true },
                         { name: "Scope", value: chartLabel, inline: true }
                     );

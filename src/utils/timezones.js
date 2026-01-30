@@ -476,15 +476,15 @@ const CITY_TIMEZONE_MAP = {
   "santo domingo": { label: "🇩🇴 Dominican Republic (Santo Domingo)", zone: "America/Santo_Domingo" },
 };
 /**
- * Get day/night indicator based on hour
+ * Get day/night indicator based on hour (aesthetic circles)
  * @param {number} hour - Hour (0-23)
- * @returns {string} Emoji indicator
+ * @returns {string} Minimal circle indicator
  */
 function getDayNightIndicator(hour) {
-  if (hour >= 6 && hour < 12) return "🌅"; // Morning
-  if (hour >= 12 && hour < 18) return "☀️"; // Afternoon
-  if (hour >= 18 && hour < 21) return "🌆"; // Evening
-  return "🌙"; // Night
+  if (hour >= 6 && hour < 12) return "◐"; // Morning - half-filled
+  if (hour >= 12 && hour < 18) return "●"; // Afternoon - filled
+  if (hour >= 18 && hour < 21) return "◑"; // Evening - half-filled other
+  return "○"; // Night - empty
 }
 
 /**
@@ -496,16 +496,15 @@ function getDayNightIndicator(hour) {
  */
 function formatTimeEntry(entry, format = '24h', showDate = true) {
   const now = DateTime.now().setZone(entry.zone);
-  const timeFormat = format === '12h' ? "h:mm:ss a" : "HH:mm:ss";
+  const timeFormat = format === '12h' ? "h:mm a" : "HH:mm";
   const time = now.toFormat(timeFormat);
   const indicator = getDayNightIndicator(now.hour);
-  const offset = now.toFormat("ZZ"); // e.g., +05:30
 
   if (showDate) {
     const date = now.toFormat("ccc, LLL d"); // e.g., "Tue, Jan 28"
-    return `${indicator} **${entry.label}** (UTC${offset})\n　　${date} • \`${time}\``;
+    return `${indicator} ${entry.label} │ \`${time}\` · ${date}`;
   }
-  return `${indicator} **${entry.label}** → \`${time}\``;
+  return `${indicator} ${entry.label} │ \`${time}\``;
 }
 
 /**
@@ -519,7 +518,7 @@ function formatTimeEntryCompact(entry, format = '24h') {
   const timeFormat = format === '12h' ? "h:mm a" : "HH:mm";
   const time = now.toFormat(timeFormat);
   const indicator = getDayNightIndicator(now.hour);
-  return `${indicator} ${entry.label}: \`${time}\``;
+  return `${indicator} ${entry.label} │ \`${time}\``;
 }
 
 /**
@@ -750,10 +749,10 @@ function formatEventForMultipleTimezones(eventTime, sourceZone, entries, format 
 
     // Show day offset if different day
     let dayLabel = '';
-    if (dayDiff > 0) dayLabel = ` (+${dayDiff})`;
-    else if (dayDiff < 0) dayLabel = ` (${dayDiff})`;
+    if (dayDiff > 0) dayLabel = ` +${dayDiff}`;
+    else if (dayDiff < 0) dayLabel = ` ${dayDiff}`;
 
-    lines.push(`${indicator} ${entry.label}: \`${timeStr}\`${dayLabel}`);
+    lines.push(`  ${indicator} ${entry.label} │ \`${timeStr}\`${dayLabel}`);
   }
 
   return lines.join('\n');

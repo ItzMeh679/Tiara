@@ -95,13 +95,13 @@ module.exports = {
                 const isTomorrow = group.date.hasSame(now.plus({ days: 1 }), "day");
 
                 let dayLabel = dateLabel;
-                if (isToday) dayLabel = `🔴 TODAY - ${dateLabel}`;
-                else if (isTomorrow) dayLabel = `🟡 Tomorrow - ${dateLabel}`;
+                if (isToday) dayLabel = `● TODAY ─ ${dateLabel}`;
+                else if (isTomorrow) dayLabel = `○ Tomorrow ─ ${dateLabel}`;
 
                 description += `### ${dayLabel}\n`;
 
                 for (const event of group.events) {
-                    const chartTag = event.charts?.name ? `📊 ${event.charts.name}` : "🌐";
+                    const chartTag = event.charts?.name ? `◈ ${event.charts.name}` : "";
 
                     // Check if event is linked to a chart with entries (either the filtered chart or the event's own chart)
                     let eventChartEntries = chartEntries;
@@ -118,16 +118,16 @@ module.exports = {
                             eventChartEntries.map(e => ({ label: e.label, zone: e.zone })),
                             timeFormat
                         );
-                        description += `> 📌 **${event.name}** ${chartTag}\n`;
+                        description += `> ▸ **${event.name}** ${chartTag}\n`;
                         multiTz.split('\n').forEach(line => {
-                            description += `> ${line}\n`;
+                            description += `>${line}\n`;
                         });
                     } else {
                         // Single timezone display
                         const timeStr = timeFormat === '12h'
                             ? event.parsedTime.toFormat("h:mm a")
                             : event.parsedTime.toFormat("HH:mm");
-                        description += `> 📌 **${event.name}** • \`${timeStr}\` ${chartTag}\n`;
+                        description += `> ▸ **${event.name}** │ \`${timeStr}\` ${chartTag}\n`;
                     }
 
                     if (event.description) {
