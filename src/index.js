@@ -238,19 +238,19 @@ client.on(Events.MessageCreate, async (message) => {
 
     if (botMentioned || commandUsed) {
         try {
+            let embed;
+
             // Check if mentioning with a chart name (e.g., "@TimeBot Friends Forever")
             if (botMentioned) {
-                // Extract potential chart name from message (everything after the mention)
                 const mentionPattern = new RegExp(`<@!?${client.user.id}>\\s*`, "g");
                 const chartName = message.content.replace(mentionPattern, "").trim();
 
                 if (chartName && message.guildId) {
-                    // Try to find the chart
                     const chart = await getChart(chartName, message.guildId);
                     if (chart) {
                         const entries = await getChartEntries(chart.id);
                         const timeFormat = await getTimeFormat(message.guildId);
-                        const embed = new EmbedBuilder()
+                        embed = new EmbedBuilder()
                             .setColor(0x5865f2)
                             .setTitle(`◷ ${chart.name}`)
                             .setDescription(generateTimeList(entries, timeFormat, 'detailed'))
@@ -262,7 +262,7 @@ client.on(Events.MessageCreate, async (message) => {
                 }
             }
 
-            // Check for custom default chart
+            // Default chart (no specific chart name or chart not found)
             const timeFormat = message.guildId ? await getTimeFormat(message.guildId) : '24h';
             let title = "◷ World Times";
             let timeList = getDefaultTimeList(timeFormat, 'detailed');
@@ -273,7 +273,6 @@ client.on(Events.MessageCreate, async (message) => {
                 if (defaultChartId) {
                     const entries = await getChartEntries(defaultChartId);
                     if (entries && entries.length > 0) {
-                        // Get chart name for title
                         const chartInfo = await getChartById(defaultChartId);
                         if (chartInfo) {
                             title = `◷ ${chartInfo.name}`;
@@ -284,7 +283,7 @@ client.on(Events.MessageCreate, async (message) => {
                 }
             }
 
-            const embed = new EmbedBuilder()
+            embed = new EmbedBuilder()
                 .setColor(0x5865f2)
                 .setTitle(title)
                 .setDescription(timeList)
