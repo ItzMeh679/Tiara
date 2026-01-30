@@ -102,8 +102,9 @@ module.exports = {
                         .setRequired(true))
                 .addStringOption(option =>
                     option.setName("datetime")
-                        .setDescription("Date and time (e.g., 'Jan 31 3:00 PM' or 'tomorrow 15:00')")
-                        .setRequired(true))
+                        .setDescription("Date and time (start typing for suggestions!)")
+                        .setRequired(true)
+                        .setAutocomplete(true))
                 .addStringOption(option =>
                     option.setName("timezone")
                         .setDescription("Timezone for the event")
@@ -140,7 +141,65 @@ module.exports = {
         try {
             const focusedOption = interaction.options.getFocused(true);
 
-            if (focusedOption.name === "timezone") {
+            if (focusedOption.name === "datetime") {
+                const input = focusedOption.value.toLowerCase();
+                const now = DateTime.now();
+
+                // Generate quick datetime suggestions
+                const suggestions = [];
+
+                // Common times for today
+                const times = [
+                    { h: 9, label: "9:00 AM" },
+                    { h: 10, label: "10:00 AM" },
+                    { h: 12, label: "12:00 PM" },
+                    { h: 14, label: "2:00 PM" },
+                    { h: 15, label: "3:00 PM" },
+                    { h: 17, label: "5:00 PM" },
+                    { h: 18, label: "6:00 PM" },
+                    { h: 19, label: "7:00 PM" },
+                    { h: 20, label: "8:00 PM" },
+                    { h: 21, label: "9:00 PM" }
+                ];
+
+                // Today's remaining times
+                for (const t of times) {
+                    if (now.hour < t.h) {
+                        suggestions.push({
+                            name: `📅 Today at ${t.label}`,
+                            value: `today ${t.label}`
+                        });
+                    }
+                }
+
+                // Tomorrow times
+                for (const t of times.slice(0, 5)) {
+                    suggestions.push({
+                        name: `📆 Tomorrow at ${t.label}`,
+                        value: `tomorrow ${t.label}`
+                    });
+                }
+
+                // Next few days
+                for (let i = 2; i <= 5; i++) {
+                    const day = now.plus({ days: i });
+                    suggestions.push({
+                        name: `🗓️ ${day.toFormat("EEE, MMM d")} at 3:00 PM`,
+                        value: `${day.toFormat("MMM d")} 3:00 PM`
+                    });
+                }
+
+                // Filter based on input
+                const filtered = input
+                    ? suggestions.filter(s =>
+                        s.name.toLowerCase().includes(input) ||
+                        s.value.toLowerCase().includes(input)
+                    )
+                    : suggestions;
+
+                await interaction.respond(filtered.slice(0, 25));
+
+            } else if (focusedOption.name === "timezone") {
                 const cities = searchCities(focusedOption.value, 25);
                 await interaction.respond(
                     cities.map(city => ({
