@@ -34,8 +34,10 @@ server.listen(PORT, () => {
     console.log(`○ Health server running on port ${PORT}`);
 });
 
-const { getDefaultTimeList, generateTimeList } = require("./utils/timezones");
-const { getChart, getChartEntries, getDefaultChartId, getTimeFormat, getChartById } = require("./utils/database");
+const { getDefaultTimeList, generateTimeList, generateInlineFields, DEFAULT_TIME_ZONES, formatEventForMultipleTimezones } = require("./utils/timezones");
+const { getChart, getChartEntries, getDefaultChartId, getTimeFormat, getChartById, getUpcomingEventsForChart } = require("./utils/database");
+const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require("discord.js");
+const { DateTime } = require("luxon");
 
 // Create client
 const client = new Client({
@@ -238,59 +240,121 @@ client.on(Events.MessageCreate, async (message) => {
 
     if (botMentioned || commandUsed) {
         try {
-            let embed;
 
-            // Check if mentioning with a chart name (e.g., "@TimeBot Friends Forever")
+            const guildId = message.guildId;
+            const timeFormat = guildId ? await getTimeFormat(guildId) : '24h';
+            const view = 'detailed';
+
+            let title = "◷ World Times";
+            let entries = DEFAULT_TIME_ZONES;
+            let chartId = null;
+            let footer = "Times update in real-time │ Use buttons to refresh";
+
+            // Check if mentioning with a chart name (e.g., "@Myra times")
             if (botMentioned) {
                 const mentionPattern = new RegExp(`<@!?${client.user.id}>\\s*`, "g");
                 const chartName = message.content.replace(mentionPattern, "").trim();
 
-                if (chartName && message.guildId) {
-                    const chart = await getChart(chartName, message.guildId);
+                if (chartName && guildId) {
+                    const chart = await getChart(chartName, guildId);
                     if (chart) {
-                        const entries = await getChartEntries(chart.id);
-                        const timeFormat = await getTimeFormat(message.guildId);
-                        embed = new EmbedBuilder()
-                            .setColor(0x5865f2)
-                            .setTitle(`◷ ${chart.name}`)
-                            .setDescription(generateTimeList(entries, timeFormat, 'detailed'))
-                            .setFooter({ text: "Use /time for interactive controls" })
-                            .setTimestamp();
-
-                        return message.reply({ embeds: [embed] });
-                    }
-                }
-            }
-
-            // Default chart (no specific chart name or chart not found)
-            const timeFormat = message.guildId ? await getTimeFormat(message.guildId) : '24h';
-            let title = "◷ World Times";
-            let timeList = getDefaultTimeList(timeFormat, 'detailed');
-            let footer = "Use /time for interactive controls │ /add to create charts";
-
-            if (message.guildId) {
-                const defaultChartId = await getDefaultChartId(message.guildId);
-                if (defaultChartId) {
-                    const entries = await getChartEntries(defaultChartId);
-                    if (entries && entries.length > 0) {
-                        const chartInfo = await getChartById(defaultChartId);
-                        if (chartInfo) {
-                            title = `◷ ${chartInfo.name}`;
-                            timeList = generateTimeList(entries, timeFormat, 'detailed');
-                            footer = "Use /time for interactive controls";
+                        const chartEntries = await getChartEntries(chart.id);
+                        if (chartEntries && chartEntries.length > 0) {
+                            title = `◈ ${chart.name}`;
+                            entries = chartEntries;
+                            chartId = chart.id;
                         }
                     }
                 }
             }
 
-            embed = new EmbedBuilder()
+            // If no specific chart found, use default chart
+            if (!chartId && guildId) {
+                const defaultChartId = await getDefaultChartId(guildId);
+                if (defaultChartId) {
+                    const chartEntries = await getChartEntries(defaultChartId);
+                    if (chartEntries && chartEntries.length > 0) {
+                        const chartInfo = await getChartById(defaultChartId);
+                        if (chartInfo) {
+                            title = `◷ ${chartInfo.name}`;
+                            entries = chartEntries;
+                            chartId = defaultChartId;
+                        }
+                    }
+                }
+            }
+
+            // Generate event tags
+            let eventTagsStr = null;
+            if (guildId) {
+                const upcomingEvents = await getUpcomingEventsForChart(guildId, chartId);
+                if (upcomingEvents && upcomingEvents.length > 0) {
+                    const now = DateTime.now();
+                    const tags = upcomingEvents.slice(0, 3).map(event => {
+                        const time = DateTime.fromISO(event.event_time).setZone(event.timezone);
+                        const isToday = time.hasSame(now, "day");
+                        const isTomorrow = time.hasSame(now.plus({ days: 1 }), "day");
+                        let dateLabel = time.toFormat("MMM d");
+                        if (isToday) dateLabel = "Today";
+                        else if (isTomorrow) dateLabel = "Tomorrow";
+
+                        // Show multi-timezone if chart has entries
+                        if (entries && entries.length > 0 && chartId) {
+                            const multiTz = formatEventForMultipleTimezones(
+                                event.event_time,
+                                event.timezone,
+                                entries.map(e => ({ label: e.label, zone: e.zone })),
+                                timeFormat
+                            );
+                            return `▸ **${event.name}** · ${dateLabel}\n${multiTz}`;
+                        } else {
+                            const timeStr = timeFormat === '12h' ? time.toFormat("h:mm a") : time.toFormat("HH:mm");
+                            return `▸ **${event.name}** · ${dateLabel} │ \`${timeStr}\``;
+                        }
+                    });
+                    eventTagsStr = tags.join("\n\n");
+                    if (upcomingEvents.length > 3) {
+                        eventTagsStr += `\n\n_+${upcomingEvents.length - 3} more events..._`;
+                    }
+                }
+            }
+
+            // Build embed
+            const embed = new EmbedBuilder()
                 .setColor(0x5865f2)
                 .setTitle(title)
-                .setDescription(timeList)
                 .setFooter({ text: footer })
                 .setTimestamp();
 
-            await message.reply({ embeds: [embed] });
+            // Build description with events and times
+            let desc = generateTimeList(entries, timeFormat, view);
+            if (eventTagsStr) {
+                desc = eventTagsStr + "\n\n───────────────\n\n" + desc;
+            }
+            embed.setDescription(desc);
+
+            // Add button controller
+            const row = new ActionRowBuilder()
+                .addComponents(
+                    new ButtonBuilder()
+                        .setCustomId(`refresh_time_${view}_${chartId || 'default'}`)
+                        .setLabel("↻ Refresh")
+                        .setStyle(ButtonStyle.Secondary),
+                    new ButtonBuilder()
+                        .setCustomId(`view_compact_${chartId || 'default'}`)
+                        .setLabel("◇ Compact")
+                        .setStyle(ButtonStyle.Secondary),
+                    new ButtonBuilder()
+                        .setCustomId(`view_detailed_${chartId || 'default'}`)
+                        .setLabel("◈ Detailed")
+                        .setStyle(ButtonStyle.Primary),
+                    new ButtonBuilder()
+                        .setCustomId(`view_grid_${chartId || 'default'}`)
+                        .setLabel("▦ Grid")
+                        .setStyle(ButtonStyle.Secondary)
+                );
+
+            await message.reply({ embeds: [embed], components: [row] });
         } catch (error) {
             console.error("Error handling message command:", error);
             await message.reply("✕ An error occurred while processing your request.");
