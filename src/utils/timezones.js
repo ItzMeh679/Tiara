@@ -725,6 +725,40 @@ function formatScheduledTime(timeStr, sourceZone, entries, format = '24h') {
   return results;
 }
 
+/**
+ * Format an event time across multiple timezones (for chart-linked events)
+ * @param {Date|string} eventTime - Event time as Date or ISO string
+ * @param {string} sourceZone - Source timezone of the event
+ * @param {Array} entries - Array of { label, zone } chart entries
+ * @param {string} format - '12h' or '24h'
+ * @returns {string} Formatted multi-line string showing event in all timezones
+ */
+function formatEventForMultipleTimezones(eventTime, sourceZone, entries, format = '24h') {
+  const source = DateTime.fromISO(eventTime.toString()).setZone(sourceZone);
+  const sourceDate = source.startOf('day');
+  const timeFormat = format === '12h' ? "h:mm a" : "HH:mm";
+
+  const lines = [];
+
+  for (const entry of entries) {
+    const converted = source.setZone(entry.zone);
+    const convertedDate = converted.startOf('day');
+    const dayDiff = Math.round(convertedDate.diff(sourceDate, 'days').days);
+
+    const timeStr = converted.toFormat(timeFormat);
+    const indicator = getDayNightIndicator(converted.hour);
+
+    // Show day offset if different day
+    let dayLabel = '';
+    if (dayDiff > 0) dayLabel = ` (+${dayDiff})`;
+    else if (dayDiff < 0) dayLabel = ` (${dayDiff})`;
+
+    lines.push(`${indicator} ${entry.label}: \`${timeStr}\`${dayLabel}`);
+  }
+
+  return lines.join('\n');
+}
+
 module.exports = {
   DEFAULT_TIME_ZONES,
   CITY_TIMEZONE_MAP,
@@ -740,4 +774,5 @@ module.exports = {
   convertTime,
   getCountdown,
   formatScheduledTime,
+  formatEventForMultipleTimezones,
 };

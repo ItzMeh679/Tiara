@@ -1,12 +1,14 @@
 const { SlashCommandBuilder, EmbedBuilder } = require("discord.js");
 const { DateTime } = require("luxon");
-const { searchCities, lookupCity } = require("../utils/timezones");
+const { searchCities, lookupCity, formatEventForMultipleTimezones } = require("../utils/timezones");
 const {
     addEvent,
     getEvents,
     removeEvent,
     getAllCharts,
-    getChart
+    getChart,
+    getChartEntries,
+    getTimeFormat
 } = require("../utils/database");
 
 /**
@@ -259,11 +261,13 @@ module.exports = {
                 // Get chart ID if specified
                 let chartId = null;
                 let chartLabel = "Guild-wide";
+                let chartEntries = null;
                 if (chartName) {
                     const chart = await getChart(chartName, guildId);
                     if (chart) {
                         chartId = chart.id;
                         chartLabel = chart.name;
+                        chartEntries = await getChartEntries(chart.id);
                     }
                 }
 
@@ -278,20 +282,46 @@ module.exports = {
                     interaction.user.id
                 );
 
+                // Get time format preference
+                const timeFormat = guildId ? await getTimeFormat(guildId) : '24h';
+
                 const embed = new EmbedBuilder()
                     .setColor(0x57f287)
                     .setTitle("📅 Event Created!")
-                    .addFields(
-                        { name: "Event", value: name, inline: true },
-                        { name: "When", value: eventTime.toFormat("EEE, MMM d 'at' h:mm a"), inline: true },
-                        { name: "Timezone", value: cityInfo.label, inline: true },
-                        { name: "Scope", value: chartLabel, inline: true }
-                    )
                     .setFooter({ text: `Event ID: ${event.id} • Use /calendar to view all events` })
                     .setTimestamp();
 
                 if (description) {
                     embed.setDescription(`📝 ${description}`);
+                }
+
+                // If linked to a chart with entries, show multi-timezone times
+                if (chartEntries && chartEntries.length > 0) {
+                    const multiTimezone = formatEventForMultipleTimezones(
+                        eventTime.toISO(),
+                        cityInfo.zone,
+                        chartEntries.map(e => ({ label: e.label, zone: e.zone })),
+                        timeFormat
+                    );
+
+                    embed.addFields(
+                        { name: "Event", value: name, inline: true },
+                        { name: "Date", value: eventTime.toFormat("EEE, MMM d, yyyy"), inline: true },
+                        { name: "Chart", value: `📊 ${chartLabel}`, inline: true }
+                    );
+                    embed.addFields({
+                        name: `🌍 Times for ${chartLabel}`,
+                        value: multiTimezone,
+                        inline: false
+                    });
+                } else {
+                    // Guild-wide or no chart - show single timezone
+                    embed.addFields(
+                        { name: "Event", value: name, inline: true },
+                        { name: "When", value: eventTime.toFormat("EEE, MMM d 'at' h:mm a"), inline: true },
+                        { name: "Timezone", value: cityInfo.label, inline: true },
+                        { name: "Scope", value: chartLabel, inline: true }
+                    );
                 }
 
                 return interaction.reply({ embeds: [embed] });

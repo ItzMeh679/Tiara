@@ -1,17 +1,21 @@
 const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require("discord.js");
-const { getDefaultTimeList, generateTimeList, generateInlineFields, DEFAULT_TIME_ZONES } = require("../utils/timezones");
+const { getDefaultTimeList, generateTimeList, generateInlineFields, DEFAULT_TIME_ZONES, formatEventForMultipleTimezones } = require("../utils/timezones");
 const { getDefaultChartId, getChartEntries, getChartById, getTimeFormat, getUpcomingEventsForChart } = require("../utils/database");
 const { DateTime } = require("luxon");
 
 /**
  * Generate event tags string for embed
+ * @param {Array} events - Array of event objects
+ * @param {string} timeFormat - '12h' or '24h'
+ * @param {Array} chartEntries - Optional chart entries for multi-timezone display
  */
-function generateEventTags(events, timeFormat) {
+function generateEventTags(events, timeFormat, chartEntries = null) {
     if (!events || events.length === 0) return null;
 
-    const tags = events.slice(0, 5).map(event => {
+    const now = DateTime.now();
+
+    const tags = events.slice(0, 3).map(event => {
         const time = DateTime.fromISO(event.event_time).setZone(event.timezone);
-        const now = DateTime.now();
         const isToday = time.hasSame(now, "day");
         const isTomorrow = time.hasSame(now.plus({ days: 1 }), "day");
 
@@ -19,16 +23,26 @@ function generateEventTags(events, timeFormat) {
         if (isToday) dateLabel = "Today";
         else if (isTomorrow) dateLabel = "Tomorrow";
 
-        const timeStr = timeFormat === '12h'
-            ? time.toFormat("h:mm a")
-            : time.toFormat("HH:mm");
-
-        return `📌 **${event.name}** • ${dateLabel} ${timeStr}`;
+        // If chart entries provided, show multi-timezone
+        if (chartEntries && chartEntries.length > 0) {
+            const multiTz = formatEventForMultipleTimezones(
+                event.event_time,
+                event.timezone,
+                chartEntries.map(e => ({ label: e.label, zone: e.zone })),
+                timeFormat
+            );
+            return `📌 **${event.name}** • ${dateLabel}\n${multiTz}`;
+        } else {
+            const timeStr = timeFormat === '12h'
+                ? time.toFormat("h:mm a")
+                : time.toFormat("HH:mm");
+            return `📌 **${event.name}** • ${dateLabel} ${timeStr}`;
+        }
     });
 
-    let result = tags.join("\n");
-    if (events.length > 5) {
-        result += `\n_+${events.length - 5} more events..._`;
+    let result = tags.join("\n\n");
+    if (events.length > 3) {
+        result += `\n\n_+${events.length - 3} more events..._`;
     }
     return result;
 }
@@ -79,7 +93,8 @@ module.exports = {
             let eventTagsStr = null;
             if (guildId) {
                 const upcomingEvents = await getUpcomingEventsForChart(guildId, chartId);
-                eventTagsStr = generateEventTags(upcomingEvents, timeFormat);
+                // Pass entries for multi-timezone display if using a chart
+                eventTagsStr = generateEventTags(upcomingEvents, timeFormat, chartId ? entries : null);
             }
 
             const embed = new EmbedBuilder()

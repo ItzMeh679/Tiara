@@ -1,6 +1,7 @@
 const { SlashCommandBuilder, EmbedBuilder } = require("discord.js");
 const { DateTime } = require("luxon");
-const { getEvents, getChart, getAllCharts, getTimeFormat } = require("../utils/database");
+const { getEvents, getChart, getAllCharts, getTimeFormat, getChartEntries } = require("../utils/database");
+const { formatEventForMultipleTimezones } = require("../utils/timezones");
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -39,6 +40,7 @@ module.exports = {
             const timeFormat = await getTimeFormat(guildId);
 
             let chartId = null;
+            let chartEntries = null;
             let title = "📅 Event Calendar";
 
             if (chartName) {
@@ -46,6 +48,7 @@ module.exports = {
                 if (chart) {
                     chartId = chart.id;
                     title = `📅 Calendar - ${chart.name}`;
+                    chartEntries = await getChartEntries(chart.id);
                 }
             }
 
@@ -98,12 +101,34 @@ module.exports = {
                 description += `### ${dayLabel}\n`;
 
                 for (const event of group.events) {
-                    const timeStr = timeFormat === '12h'
-                        ? event.parsedTime.toFormat("h:mm a")
-                        : event.parsedTime.toFormat("HH:mm");
-
                     const chartTag = event.charts?.name ? `📊 ${event.charts.name}` : "🌐";
-                    description += `> 📌 **${event.name}** • \`${timeStr}\` ${chartTag}\n`;
+
+                    // Check if event is linked to a chart with entries (either the filtered chart or the event's own chart)
+                    let eventChartEntries = chartEntries;
+                    if (!eventChartEntries && event.chart_id) {
+                        // Fetch entries for this specific event's chart
+                        eventChartEntries = await getChartEntries(event.chart_id);
+                    }
+
+                    if (eventChartEntries && eventChartEntries.length > 0) {
+                        // Show multi-timezone display
+                        const multiTz = formatEventForMultipleTimezones(
+                            event.event_time,
+                            event.timezone,
+                            eventChartEntries.map(e => ({ label: e.label, zone: e.zone })),
+                            timeFormat
+                        );
+                        description += `> 📌 **${event.name}** ${chartTag}\n`;
+                        multiTz.split('\n').forEach(line => {
+                            description += `> ${line}\n`;
+                        });
+                    } else {
+                        // Single timezone display
+                        const timeStr = timeFormat === '12h'
+                            ? event.parsedTime.toFormat("h:mm a")
+                            : event.parsedTime.toFormat("HH:mm");
+                        description += `> 📌 **${event.name}** • \`${timeStr}\` ${chartTag}\n`;
+                    }
 
                     if (event.description) {
                         description += `> _${event.description}_\n`;
