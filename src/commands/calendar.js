@@ -41,13 +41,13 @@ module.exports = {
 
             let chartId = null;
             let chartEntries = null;
-            let title = "📅 Event Calendar";
+            let title = "▪ Event Calendar";
 
             if (chartName) {
                 const chart = await getChart(chartName, guildId);
                 if (chart) {
                     chartId = chart.id;
-                    title = `📅 Calendar - ${chart.name}`;
+                    title = `▪ Calendar ─ ${chart.name}`;
                     chartEntries = await getChartEntries(chart.id);
                 }
             }

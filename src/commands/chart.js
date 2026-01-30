@@ -115,17 +115,17 @@ module.exports = {
             // Create embed
             const embed = new EmbedBuilder()
                 .setColor(0x5865f2)
-                .setFooter({ text: "Times update in real-time • Use buttons to refresh" })
+                .setFooter({ text: "Times update in real-time │ Use buttons to refresh" })
                 .setTimestamp();
 
             if (view === "grid") {
-                embed.setTitle(`🕒 ${chart.name}`);
+                embed.setTitle(`◈ ${chart.name}`);
                 if (eventTagsStr) {
                     embed.setDescription(eventTagsStr + "\n\n───────────────");
                 }
                 embed.addFields(generateInlineFields(entries, timeFormat));
             } else {
-                embed.setTitle(`🕒 ${chart.name}`);
+                embed.setTitle(`◈ ${chart.name}`);
                 let desc = generateTimeList(entries, timeFormat, view);
                 if (eventTagsStr) {
                     desc = eventTagsStr + "\n\n───────────────\n\n" + desc;

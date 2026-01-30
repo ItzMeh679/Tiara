@@ -68,9 +68,9 @@ module.exports = {
             const timeFormat = guildId ? await getTimeFormat(guildId) : '24h';
 
             // Check for custom default chart
-            let title = "🕒 Current World Times";
+            let title = "◷ World Times";
             let entries = DEFAULT_TIME_ZONES;
-            let footer = "Use /setdefault to set a custom chart as default";
+            let footer = "Use /setdefault to set a custom chart";
             let chartId = null;
 
             if (guildId) {
@@ -80,9 +80,9 @@ module.exports = {
                     if (chartEntries && chartEntries.length > 0) {
                         const chartInfo = await getChartById(defaultChartId);
                         if (chartInfo) {
-                            title = `🕒 ${chartInfo.name}`;
+                            title = `◷ ${chartInfo.name}`;
                             entries = chartEntries;
-                            footer = "Use /setdefault to change • /chart <name> for others";
+                            footer = "/setdefault to change │ /chart <name> for others";
                             chartId = defaultChartId;
                         }
                     }
