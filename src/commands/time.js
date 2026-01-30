@@ -142,7 +142,7 @@ module.exports = {
         } catch (error) {
             console.error("Time command error:", error);
             return interaction.reply({
-                content: "❌ An error occurred while fetching time. Please try again.",
+                content: "✕ An error occurred while fetching time. Please try again.",
                 ephemeral: true,
             });
         }

@@ -27,7 +27,7 @@ module.exports = {
 
             if (cityNames.length === 0) {
                 return interaction.reply({
-                    content: "❌ Please provide at least one city!",
+                    content: "✕ Please provide at least one city!",
                     ephemeral: true
                 });
             }
@@ -62,25 +62,25 @@ module.exports = {
             }
 
             // Build response
-            let response = `📊 **Chart: ${chart.name}**\n\n`;
+            let response = `◈ **Chart: ${chart.name}**\n\n`;
 
             if (results.added.length > 0) {
-                response += `✅ **Added (${results.added.length}):**\n${results.added.map(c => `　• ${c}`).join("\n")}\n\n`;
+                response += `✓ **Added (${results.added.length}):**\n${results.added.map(c => `　· ${c}`).join("\n")}\n\n`;
             }
 
             if (results.duplicate.length > 0) {
-                response += `⚠️ **Already exists (${results.duplicate.length}):**\n${results.duplicate.map(c => `　• ${c}`).join("\n")}\n\n`;
+                response += `⚠️ **Already exists (${results.duplicate.length}):**\n${results.duplicate.map(c => `　· ${c}`).join("\n")}\n\n`;
             }
 
             if (results.notFound.length > 0) {
-                response += `❌ **Not found (${results.notFound.length}):**\n${results.notFound.map(c => `　• ${c}`).join("\n")}`;
+                response += `✕ **Not found (${results.notFound.length}):**\n${results.notFound.map(c => `　· ${c}`).join("\n")}`;
             }
 
             return interaction.editReply({ content: response });
         } catch (error) {
             console.error("Quickadd command error:", error);
             const reply = {
-                content: "❌ An error occurred. Please try again.",
+                content: "✕ An error occurred. Please try again.",
                 ephemeral: true
             };
             if (interaction.deferred) {

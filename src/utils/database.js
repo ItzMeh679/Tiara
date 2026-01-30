@@ -5,8 +5,8 @@ const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_KEY;
 
 if (!supabaseUrl || !supabaseKey) {
-  console.error("❌ Error: SUPABASE_URL and SUPABASE_KEY must be set in .env file!");
-  console.log("\n📝 Setup Instructions:");
+  console.error("✕ Error: SUPABASE_URL and SUPABASE_KEY must be set in .env file!");
+  console.log("\n▫ Setup Instructions:");
   console.log("1. Go to https://supabase.com and create a new project");
   console.log("2. Go to Project Settings > API");
   console.log("3. Copy the Project URL and anon key to .env file");

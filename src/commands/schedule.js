@@ -69,7 +69,7 @@ module.exports = {
             const sourceInfo = lookupCity(zoneCity);
             if (!sourceInfo) {
                 return interaction.reply({
-                    content: `❌ City **"${zoneCity}"** not found!`,
+                    content: `✕ City **"${zoneCity}"** not found!`,
                     ephemeral: true
                 });
             }
@@ -107,8 +107,8 @@ module.exports = {
             }
 
             const description = message
-                ? `📅 **${message}**\n\n📍 ${timeStr} in ${sourceInfo.label}`
-                : `📍 ${timeStr} in ${sourceInfo.label}`;
+                ? `▪ **${message}**\n\n▸ ${timeStr} in ${sourceInfo.label}`
+                : `▸ ${timeStr} in ${sourceInfo.label}`;
 
             const embed = new EmbedBuilder()
                 .setColor(0x57f287)
@@ -122,7 +122,7 @@ module.exports = {
         } catch (error) {
             console.error("Schedule command error:", error);
             return interaction.reply({
-                content: "❌ An error occurred. Please try again.",
+                content: "✕ An error occurred. Please try again.",
                 ephemeral: true
             });
         }

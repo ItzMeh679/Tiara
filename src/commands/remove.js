@@ -82,7 +82,7 @@ module.exports = {
             const chart = await getChart(chartName, guildId);
             if (!chart) {
                 return interaction.reply({
-                    content: `❌ Chart **"${chartName}"** not found!`,
+                    content: `✕ Chart **"${chartName}"** not found!`,
                     ephemeral: true,
                 });
             }
@@ -104,11 +104,11 @@ module.exports = {
                 // Check if chart is now empty, optionally delete it
                 const remainingEntries = await getChartEntries(chart.id);
 
-                let message = `✅ Removed **${cityLabel}** from chart **"${chart.name}"**`;
+                let message = `✓ Removed **${cityLabel}** from chart **"${chart.name}"**`;
 
                 if (remainingEntries.length === 0) {
                     await deleteChart(chart.id);
-                    message += `\n\n📭 Chart **"${chart.name}"** is now empty and has been deleted.`;
+                    message += `\n\n▫ Chart **"${chart.name}"** is now empty and has been deleted.`;
                 }
 
                 return interaction.reply({ content: message });
@@ -121,7 +121,7 @@ module.exports = {
         } catch (error) {
             console.error("Remove command error:", error);
             return interaction.reply({
-                content: "❌ An error occurred while removing the city. Please try again.",
+                content: "✕ An error occurred while removing the city. Please try again.",
                 ephemeral: true,
             });
         }

@@ -20,7 +20,7 @@ module.exports = {
 
             if (!guildId) {
                 return interaction.reply({
-                    content: "❌ This command can only be used in a server!",
+                    content: "✕ This command can only be used in a server!",
                     ephemeral: true
                 });
             }
@@ -30,7 +30,7 @@ module.exports = {
 
             if (format === currentFormat) {
                 return interaction.reply({
-                    content: `⏰ Time format is already set to **${format === "12h" ? "12-hour (AM/PM)" : "24-hour"}**!`,
+                    content: `◷ Time format is already set to **${format === "12h" ? "12-hour (AM/PM)" : "24-hour"}**!`,
                     ephemeral: true
                 });
             }
@@ -39,7 +39,7 @@ module.exports = {
 
             const embed = new EmbedBuilder()
                 .setColor(0x57f287)
-                .setTitle("⏰ Time Format Updated")
+                .setTitle("◷ Time Format Updated")
                 .setDescription(format === "12h"
                     ? "Times will now be displayed in **12-hour format** with AM/PM.\n\nExample: `2:30:45 PM`"
                     : "Times will now be displayed in **24-hour format**.\n\nExample: `14:30:45`")
@@ -50,7 +50,7 @@ module.exports = {
         } catch (error) {
             console.error("Timeformat command error:", error);
             return interaction.reply({
-                content: "❌ An error occurred while changing the time format. Please try again.",
+                content: "✕ An error occurred while changing the time format. Please try again.",
                 ephemeral: true,
             });
         }

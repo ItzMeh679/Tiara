@@ -66,7 +66,7 @@ module.exports = {
             const cityInfo = lookupCity(cityName);
             if (!cityInfo) {
                 return interaction.reply({
-                    content: `❌ City **"${cityName}"** not found!\n\nTry common cities like: Mumbai, Tokyo, New York, London, Sydney, Dubai, Singapore, Paris, etc.`,
+                    content: `✕ City **"${cityName}"** not found!\n\nTry common cities like: Mumbai, Tokyo, New York, London, Sydney, Dubai, Singapore, Paris, etc.`,
                     ephemeral: true,
                 });
             }
@@ -79,7 +79,7 @@ module.exports = {
 
             if (result.success) {
                 return interaction.reply({
-                    content: `✅ Added **${cityInfo.label}** to chart **"${chart.name}"**!`,
+                    content: `✓ Added **${cityInfo.label}** to chart **"${chart.name}"**!`,
                 });
             } else {
                 return interaction.reply({
@@ -90,7 +90,7 @@ module.exports = {
         } catch (error) {
             console.error("Add command error:", error);
             return interaction.reply({
-                content: "❌ An error occurred while adding the city. Please try again.",
+                content: "✕ An error occurred while adding the city. Please try again.",
                 ephemeral: true,
             });
         }

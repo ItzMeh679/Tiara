@@ -48,7 +48,7 @@ module.exports = {
 
                 if (!cityInfo) {
                     return interaction.reply({
-                        content: `❌ City **"${cityName}"** not found!`,
+                        content: `✕ City **"${cityName}"** not found!`,
                         ephemeral: true
                     });
                 }
@@ -69,7 +69,7 @@ module.exports = {
 
                 const embed = new EmbedBuilder()
                     .setColor(0x57f287)
-                    .setTitle("✅ Timezone Set!")
+                    .setTitle("✓ Timezone Set!")
                     .setDescription(`Your timezone is now set to:\n${indicator} **${cityInfo.label}**`)
                     .addFields(
                         { name: "Current Time", value: `\`${now.toFormat("h:mm:ss a")}\``, inline: true },
@@ -92,7 +92,7 @@ module.exports = {
 
                 if (!data) {
                     return interaction.reply({
-                        content: "❌ You haven't set your timezone yet!\n\nUse `/mytime set <city>` to set it.",
+                        content: "✕ You haven't set your timezone yet!\n\nUse `/mytime set <city>` to set it.",
                         ephemeral: true
                     });
                 }
@@ -106,8 +106,8 @@ module.exports = {
                     .setDescription(`**${data.city_label}**`)
                     .addFields(
                         { name: "🕐 Time", value: `\`${now.toFormat("h:mm:ss a")}\``, inline: true },
-                        { name: "📅 Date", value: now.toFormat("cccc, LLLL d"), inline: true },
-                        { name: "🌐 UTC Offset", value: now.toFormat("ZZZZ"), inline: true }
+                        { name: "▪ Date", value: now.toFormat("cccc, LLLL d"), inline: true },
+                        { name: "○ UTC Offset", value: now.toFormat("ZZZZ"), inline: true }
                     )
                     .setFooter({ text: "Use /mytime set to change your timezone" })
                     .setTimestamp();
@@ -117,7 +117,7 @@ module.exports = {
         } catch (error) {
             console.error("Mytime command error:", error);
             return interaction.reply({
-                content: "❌ An error occurred. Please try again.",
+                content: "✕ An error occurred. Please try again.",
                 ephemeral: true
             });
         }

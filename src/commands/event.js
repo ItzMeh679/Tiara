@@ -168,7 +168,7 @@ module.exports = {
                 for (const t of times) {
                     if (now.hour < t.h) {
                         suggestions.push({
-                            name: `📅 Today at ${t.label}`,
+                            name: `▪ Today at ${t.label}`,
                             value: `today ${t.label}`
                         });
                     }
@@ -244,7 +244,7 @@ module.exports = {
                 const cityInfo = lookupCity(timezoneCity);
                 if (!cityInfo) {
                     return interaction.reply({
-                        content: `❌ Timezone/city **"${timezoneCity}"** not found!`,
+                        content: `✕ Timezone/city **"${timezoneCity}"** not found!`,
                         ephemeral: true
                     });
                 }
@@ -253,7 +253,7 @@ module.exports = {
                 const eventTime = parseDateTime(datetimeStr, cityInfo.zone);
                 if (!eventTime) {
                     return interaction.reply({
-                        content: `❌ Could not parse date/time: **"${datetimeStr}"**\n\nExamples:\n• \`3:00 PM\` (today/tomorrow)\n• \`Jan 31 3:00 PM\`\n• \`2026-01-31 15:00\`\n• \`tomorrow 3pm\``,
+                        content: `✕ Could not parse date/time: **"${datetimeStr}"**\n\nExamples:\n· \`3:00 PM\` (today/tomorrow)\n· \`Jan 31 3:00 PM\`\n· \`2026-01-31 15:00\`\n· \`tomorrow 3pm\``,
                         ephemeral: true
                     });
                 }
@@ -343,20 +343,20 @@ module.exports = {
 
                 if (events.length === 0) {
                     return interaction.reply({
-                        content: "📅 No upcoming events found.\n\nUse `/event add` to create one!",
+                        content: "▪ No upcoming events found.\n\nUse `/event add` to create one!",
                         ephemeral: true
                     });
                 }
 
                 const eventList = events.slice(0, 15).map(event => {
                     const time = DateTime.fromISO(event.event_time).setZone(event.timezone);
-                    const chartTag = event.charts?.name ? ` • 📊 ${event.charts.name}` : " • 🌐 Guild-wide";
-                    return `**${event.name}** (ID: ${event.id})\n📅 ${time.toFormat("EEE, MMM d 'at' h:mm a")}${chartTag}`;
+                    const chartTag = event.charts?.name ? ` · ◈ ${event.charts.name}` : " · ○ Guild-wide";
+                    return `**${event.name}** (ID: ${event.id})\n▪ ${time.toFormat("EEE, MMM d 'at' h:mm a")}${chartTag}`;
                 }).join("\n\n");
 
                 const embed = new EmbedBuilder()
                     .setColor(0x5865f2)
-                    .setTitle(`📅 ${filterLabel}`)
+                    .setTitle(`▪ ${filterLabel}`)
                     .setDescription(eventList)
                     .setFooter({ text: `Showing ${Math.min(events.length, 15)} of ${events.length} events` })
                     .setTimestamp();
@@ -370,20 +370,20 @@ module.exports = {
 
                 if (!result.success) {
                     return interaction.reply({
-                        content: `❌ Event with ID **${eventId}** not found or you don't have permission to delete it.`,
+                        content: `✕ Event with ID **${eventId}** not found or you don't have permission to delete it.`,
                         ephemeral: true
                     });
                 }
 
                 return interaction.reply({
-                    content: `✅ Event **"${result.deleted.name}"** has been removed!`,
+                    content: `✓ Event **"${result.deleted.name}"** has been removed!`,
                     ephemeral: false
                 });
             }
         } catch (error) {
             console.error("Event command error:", error);
             return interaction.reply({
-                content: "❌ An error occurred. Please try again.",
+                content: "✕ An error occurred. Please try again.",
                 ephemeral: true
             });
         }

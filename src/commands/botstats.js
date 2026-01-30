@@ -28,24 +28,24 @@ module.exports = {
 
             const embed = new EmbedBuilder()
                 .setColor(0x5865f2)
-                .setTitle("📊 TimeBot Statistics")
+                .setTitle("◈ Bot Statistics")
                 .setDescription("Usage statistics across all servers")
                 .addFields(
-                    { name: "🌐 Servers Using Bot", value: `\`${uniqueGuilds.size || totalGuilds}\``, inline: true },
-                    { name: "📋 Total Charts", value: `\`${totalCharts}\``, inline: true },
-                    { name: "🏙️ Total Cities Added", value: `\`${totalEntries}\``, inline: true },
-                    { name: "👤 Users with Timezone", value: `\`${totalUsers}\``, inline: true },
-                    { name: "📈 Avg Cities/Chart", value: `\`${totalCharts > 0 ? (totalEntries / totalCharts).toFixed(1) : 0}\``, inline: true },
-                    { name: "⏰ Bot Uptime", value: formatUptime(process.uptime()), inline: true }
+                    { name: "Servers", value: `\`${uniqueGuilds.size || totalGuilds}\``, inline: true },
+                    { name: "Charts", value: `\`${totalCharts}\``, inline: true },
+                    { name: "Cities Added", value: `\`${totalEntries}\``, inline: true },
+                    { name: "Users with TZ", value: `\`${totalUsers}\``, inline: true },
+                    { name: "Avg Cities/Chart", value: `\`${totalCharts > 0 ? (totalEntries / totalCharts).toFixed(1) : 0}\``, inline: true },
+                    { name: "Uptime", value: formatUptime(process.uptime()), inline: true }
                 )
-                .setFooter({ text: "TimeBot • Helping teams across timezones" })
+                .setFooter({ text: "TimeBot │ Helping teams across timezones" })
                 .setTimestamp();
 
             return interaction.editReply({ embeds: [embed] });
         } catch (error) {
             console.error("Botstats command error:", error);
             const reply = {
-                content: "❌ An error occurred fetching statistics.",
+                content: "✕ An error occurred fetching statistics.",
                 ephemeral: true
             };
             if (interaction.deferred) {

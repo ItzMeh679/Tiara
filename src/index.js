@@ -31,7 +31,7 @@ const server = http.createServer((req, res) => {
 });
 
 server.listen(PORT, () => {
-    console.log(`🌐 Health server running on port ${PORT}`);
+    console.log(`○ Health server running on port ${PORT}`);
 });
 
 const { getDefaultTimeList, generateTimeList } = require("./utils/timezones");
@@ -103,7 +103,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
                         if (isToday) dateLabel = "Today";
                         else if (isTomorrow) dateLabel = "Tomorrow";
                         const timeStr = timeFormat === '12h' ? time.toFormat("h:mm a") : time.toFormat("HH:mm");
-                        return `📌 **${event.name}** • ${dateLabel} ${timeStr}`;
+                        return `▸ **${event.name}** · ${dateLabel} │ \`${timeStr}\``;
                     });
                     let result = tags.join("\n");
                     if (events.length > 5) result += `\n_+${events.length - 5} more events..._`;
@@ -126,18 +126,18 @@ client.on(Events.InteractionCreate, async (interaction) => {
                 const guildId = interaction.guildId;
                 const timeFormat = guildId ? await getTimeFormat(guildId) : '24h';
 
-                let title = "🕒 Current World Times";
+                let title = "◷ World Times";
                 let entries = DEFAULT_TIME_ZONES;
-                let footer = "Use /setdefault to set a custom chart as default";
+                let footer = "Use /setdefault to set a custom chart";
 
                 if (chartId) {
                     const chartEntries = await getChartEntries(parseInt(chartId));
                     if (chartEntries && chartEntries.length > 0) {
                         const chartInfo = await getChartById(parseInt(chartId));
                         if (chartInfo) {
-                            title = `🕒 ${chartInfo.name}`;
+                            title = `◷ ${chartInfo.name}`;
                             entries = chartEntries;
-                            footer = "Use /setdefault to change • /chart <name> for others";
+                            footer = "/setdefault to change │ /chart <name> for others";
                         }
                     }
                 }
@@ -173,19 +173,19 @@ client.on(Events.InteractionCreate, async (interaction) => {
                     .addComponents(
                         new ButtonBuilder()
                             .setCustomId(`refresh_time_${view}_${chartId || 'default'}`)
-                            .setLabel("🔄 Refresh")
+                            .setLabel("↻ Refresh")
                             .setStyle(ButtonStyle.Secondary),
                         new ButtonBuilder()
                             .setCustomId(`view_compact_${chartId || 'default'}`)
-                            .setLabel("📱 Compact")
+                            .setLabel("◇ Compact")
                             .setStyle(view === 'compact' ? ButtonStyle.Primary : ButtonStyle.Secondary),
                         new ButtonBuilder()
                             .setCustomId(`view_detailed_${chartId || 'default'}`)
-                            .setLabel("📋 Detailed")
+                            .setLabel("◈ Detailed")
                             .setStyle(view === 'detailed' ? ButtonStyle.Primary : ButtonStyle.Secondary),
                         new ButtonBuilder()
                             .setCustomId(`view_grid_${chartId || 'default'}`)
-                            .setLabel("📊 Grid")
+                            .setLabel("▦ Grid")
                             .setStyle(view === 'grid' ? ButtonStyle.Primary : ButtonStyle.Secondary)
                     );
 
@@ -195,7 +195,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
         } catch (error) {
             console.error("Button interaction error:", error);
             try {
-                await interaction.reply({ content: "❌ An error occurred.", ephemeral: true });
+                await interaction.reply({ content: "✕ An error occurred.", ephemeral: true });
             } catch (e) {
                 // Already responded
             }
@@ -213,7 +213,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
     } catch (error) {
         console.error(`Error executing ${interaction.commandName}:`, error);
         const reply = {
-            content: "❌ There was an error executing this command!",
+            content: "✕ There was an error executing this command!",
             ephemeral: true,
         };
         try {
@@ -252,7 +252,7 @@ client.on(Events.MessageCreate, async (message) => {
                         const timeFormat = await getTimeFormat(message.guildId);
                         const embed = new EmbedBuilder()
                             .setColor(0x5865f2)
-                            .setTitle(`🕒 ${chart.name}`)
+                            .setTitle(`◷ ${chart.name}`)
                             .setDescription(generateTimeList(entries, timeFormat, 'detailed'))
                             .setFooter({ text: "Use /time for interactive controls" })
                             .setTimestamp();
@@ -264,9 +264,9 @@ client.on(Events.MessageCreate, async (message) => {
 
             // Check for custom default chart
             const timeFormat = message.guildId ? await getTimeFormat(message.guildId) : '24h';
-            let title = "🕒 Current World Times";
+            let title = "◷ World Times";
             let timeList = getDefaultTimeList(timeFormat, 'detailed');
-            let footer = "Use /time for interactive controls • /add to create charts";
+            let footer = "Use /time for interactive controls │ /add to create charts";
 
             if (message.guildId) {
                 const defaultChartId = await getDefaultChartId(message.guildId);
@@ -276,7 +276,7 @@ client.on(Events.MessageCreate, async (message) => {
                         // Get chart name for title
                         const chartInfo = await getChartById(defaultChartId);
                         if (chartInfo) {
-                            title = `🕒 ${chartInfo.name}`;
+                            title = `◷ ${chartInfo.name}`;
                             timeList = generateTimeList(entries, timeFormat, 'detailed');
                             footer = "Use /time for interactive controls";
                         }
@@ -294,23 +294,23 @@ client.on(Events.MessageCreate, async (message) => {
             await message.reply({ embeds: [embed] });
         } catch (error) {
             console.error("Error handling message command:", error);
-            await message.reply("❌ An error occurred while processing your request.");
+            await message.reply("✕ An error occurred while processing your request.");
         }
     }
 });
 
 // Bot ready
 client.once(Events.ClientReady, (c) => {
-    console.log(`\n✅ Logged in as ${c.user.tag}`);
-    console.log(`📊 Loaded ${client.commands.size} commands`);
-    console.log(`\n🔗 Invite URL:`);
+    console.log(`\n✓ Logged in as ${c.user.tag}`);
+    console.log(`◈ Loaded ${client.commands.size} commands`);
+    console.log(`\n○ Invite URL:`);
     console.log(`https://discord.com/api/oauth2/authorize?client_id=${c.user.id}&permissions=2147485696&scope=bot%20applications.commands\n`);
 });
 
 // Login
 if (!process.env.DISCORD_TOKEN || process.env.DISCORD_TOKEN === "YOUR_BOT_TOKEN_HERE") {
-    console.error("❌ Error: DISCORD_TOKEN not set in .env file!");
-    console.log("\n📝 Setup Instructions:");
+    console.error("✕ Error: DISCORD_TOKEN not set in .env file!");
+    console.log("\n▫ Setup Instructions:");
     console.log("1. Go to https://discord.com/developers/applications");
     console.log("2. Create a new application");
     console.log("3. Go to 'Bot' section and create a bot");

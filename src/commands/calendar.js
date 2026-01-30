@@ -58,7 +58,7 @@ module.exports = {
                 const embed = new EmbedBuilder()
                     .setColor(0x5865f2)
                     .setTitle(title)
-                    .setDescription("📭 No upcoming events scheduled.\n\nUse `/event add` to create your first event!")
+                    .setDescription("▫ No upcoming events scheduled.\n\nUse `/event add` to create your first event!")
                     .setTimestamp();
 
                 return interaction.reply({ embeds: [embed] });
@@ -149,14 +149,14 @@ module.exports = {
                 .setColor(0x5865f2)
                 .setTitle(title)
                 .setDescription(description)
-                .setFooter({ text: `${events.length} upcoming events • Use /event add to create more` })
+                .setFooter({ text: `${events.length} upcoming events · Use /event add to create more` })
                 .setTimestamp();
 
             return interaction.reply({ embeds: [embed] });
         } catch (error) {
             console.error("Calendar command error:", error);
             return interaction.reply({
-                content: "❌ An error occurred while loading the calendar.",
+                content: "✕ An error occurred while loading the calendar.",
                 ephemeral: true
             });
         }

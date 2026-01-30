@@ -99,7 +99,7 @@ module.exports = {
             const chart = await getChart(chartName, guildId);
             if (!chart) {
                 return interaction.reply({
-                    content: `❌ Chart **"${chartName}"** not found!\n\nUse \`/charts\` to see all available charts, or \`/add\` to create a new one.`,
+                    content: `✕ Chart **"${chartName}"** not found!\n\nUse \`/charts\` to see all available charts, or \`/add\` to create a new one.`,
                     ephemeral: true,
                 });
             }
@@ -158,7 +158,7 @@ module.exports = {
         } catch (error) {
             console.error("Chart command error:", error);
             return interaction.reply({
-                content: "❌ An error occurred while fetching the chart. Please try again.",
+                content: "✕ An error occurred while fetching the chart. Please try again.",
                 ephemeral: true,
             });
         }

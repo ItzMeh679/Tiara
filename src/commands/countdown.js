@@ -45,7 +45,7 @@ module.exports = {
             const zoneInfo = lookupCity(zoneCity);
             if (!zoneInfo) {
                 return interaction.reply({
-                    content: `❌ City **"${zoneCity}"** not found!`,
+                    content: `✕ City **"${zoneCity}"** not found!`,
                     ephemeral: true
                 });
             }
@@ -53,7 +53,7 @@ module.exports = {
             const countdown = getCountdown(timeStr, zoneInfo.zone);
             if (!countdown) {
                 return interaction.reply({
-                    content: `❌ Invalid time format! Use formats like \`3:00 PM\` or \`15:00\``,
+                    content: `✕ Invalid time format! Use formats like \`3:00 PM\` or \`15:00\``,
                     ephemeral: true
                 });
             }
@@ -72,9 +72,9 @@ module.exports = {
                 .setTitle(title)
                 .setDescription(`Time remaining until **${countdown.targetTime}** in ${zoneInfo.label}`)
                 .addFields(
-                    { name: "⏰ Time Left", value: countdownStr, inline: true },
-                    { name: "📅 Target", value: `${countdown.targetTime}\n${countdown.targetDate}`, inline: true },
-                    { name: "📍 Location", value: zoneInfo.label, inline: true }
+                    { name: "◷ Time Left", value: countdownStr, inline: true },
+                    { name: "▪ Target", value: `${countdown.targetTime}\n${countdown.targetDate}`, inline: true },
+                    { name: "▸ Location", value: zoneInfo.label, inline: true }
                 )
                 .setFooter({ text: "Countdown calculated at request time" })
                 .setTimestamp();
@@ -83,7 +83,7 @@ module.exports = {
         } catch (error) {
             console.error("Countdown command error:", error);
             return interaction.reply({
-                content: "❌ An error occurred. Please try again.",
+                content: "✕ An error occurred. Please try again.",
                 ephemeral: true
             });
         }

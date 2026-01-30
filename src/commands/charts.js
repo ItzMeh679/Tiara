@@ -15,7 +15,7 @@ module.exports = {
 
             if (charts.length === 0) {
                 return interaction.reply({
-                    content: `📭 No charts yet!\n\nCreate one with \`/add <chart-name> <city>\`\nExample: \`/add "Friends Forever" Mumbai\``,
+                    content: `▫ No charts yet!\n\nCreate one with \`/add <chart-name> <city>\`\nExample: \`/add "Friends Forever" Mumbai\``,
                     ephemeral: true,
                 });
             }
@@ -28,7 +28,7 @@ module.exports = {
             // Create embed
             const embed = new EmbedBuilder()
                 .setColor(0x5865f2)
-                .setTitle("📊 Available Time Charts")
+                .setTitle("◈ Available Charts")
                 .setDescription(chartList)
                 .setFooter({ text: "Use /chart <name> to view a chart" })
                 .setTimestamp();
@@ -37,7 +37,7 @@ module.exports = {
         } catch (error) {
             console.error("Charts command error:", error);
             return interaction.reply({
-                content: "❌ An error occurred while fetching charts. Please try again.",
+                content: "✕ An error occurred while fetching charts.",
                 ephemeral: true,
             });
         }

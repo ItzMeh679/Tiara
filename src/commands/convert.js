@@ -50,14 +50,14 @@ module.exports = {
 
             if (!fromInfo) {
                 return interaction.reply({
-                    content: `❌ Source city **"${fromCity}"** not found!`,
+                    content: `✕ Source city **"${fromCity}"** not found!`,
                     ephemeral: true
                 });
             }
 
             if (!toInfo) {
                 return interaction.reply({
-                    content: `❌ Target city **"${toCity}"** not found!`,
+                    content: `✕ Target city **"${toCity}"** not found!`,
                     ephemeral: true
                 });
             }
@@ -66,7 +66,7 @@ module.exports = {
 
             if (!result) {
                 return interaction.reply({
-                    content: `❌ Invalid time format! Use formats like \`3:00 PM\` or \`15:00\``,
+                    content: `✕ Invalid time format! Use formats like \`3:00 PM\` or \`15:00\``,
                     ephemeral: true
                 });
             }
@@ -75,11 +75,11 @@ module.exports = {
 
             const embed = new EmbedBuilder()
                 .setColor(0x5865f2)
-                .setTitle("🔄 Time Conversion")
+                .setTitle("↻ Time Conversion")
                 .setDescription(`Converting **${timeStr}** from ${fromInfo.label} to ${toInfo.label}`)
                 .addFields(
                     {
-                        name: `📍 ${fromInfo.label}`,
+                        name: `▸ ${fromInfo.label}`,
                         value: `\`${result.fromTime}\`\n${result.fromDate}`,
                         inline: true
                     },
@@ -101,7 +101,7 @@ module.exports = {
         } catch (error) {
             console.error("Convert command error:", error);
             return interaction.reply({
-                content: "❌ An error occurred during conversion. Please try again.",
+                content: "✕ An error occurred during conversion. Please try again.",
                 ephemeral: true
             });
         }

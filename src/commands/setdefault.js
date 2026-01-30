@@ -42,7 +42,7 @@ module.exports = {
             if (!chartName) {
                 await setDefaultChart(guildId, null);
                 return interaction.reply({
-                    content: `✅ Reset to **built-in default** time chart!`,
+                    content: `✓ Reset to **built-in default** time chart!`,
                 });
             }
 
@@ -50,7 +50,7 @@ module.exports = {
             const chart = await getChart(chartName, guildId);
             if (!chart) {
                 return interaction.reply({
-                    content: `❌ Chart **"${chartName}"** not found!\n\nUse \`/charts\` to see available charts, or \`/add\` to create one first.`,
+                    content: `✕ Chart **"${chartName}"** not found!\n\nUse \`/charts\` to see available charts, or \`/add\` to create one first.`,
                     ephemeral: true,
                 });
             }
@@ -59,12 +59,12 @@ module.exports = {
             await setDefaultChart(guildId, chart.id);
 
             return interaction.reply({
-                content: `✅ **"${chart.name}"** is now the default chart!\n\nUsing \`!time\` or \`@TimeBot\` will now show this chart.`,
+                content: `✓ **"${chart.name}"** is now the default chart!\n\nUsing \`!time\` or \`@TimeBot\` will now show this chart.`,
             });
         } catch (error) {
             console.error("Setdefault command error:", error);
             return interaction.reply({
-                content: "❌ An error occurred while setting the default chart. Please try again.",
+                content: "✕ An error occurred while setting the default chart. Please try again.",
                 ephemeral: true,
             });
         }
