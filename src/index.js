@@ -371,8 +371,32 @@ client.on(Events.MessageCreate, async (message) => {
 client.once(Events.ClientReady, (c) => {
     console.log(`\n✓ Logged in as ${c.user.tag}`);
     console.log(`◈ Loaded ${client.commands.size} commands`);
+    console.log(`○ Guilds: ${c.guilds.cache.size}`);
     console.log(`\n○ Invite URL:`);
     console.log(`https://discord.com/api/oauth2/authorize?client_id=${c.user.id}&permissions=2147485696&scope=bot%20applications.commands\n`);
+    console.log(`○ Bot is fully ready and listening for events!`);
+});
+
+// Handle errors
+client.on('error', (error) => {
+    console.error('Discord client error:', error);
+});
+
+client.on('warn', (warning) => {
+    console.warn('Discord client warning:', warning);
+});
+
+// Handle disconnects
+client.on('shardDisconnect', (event, shardId) => {
+    console.log(`Shard ${shardId} disconnected:`, event);
+});
+
+client.on('shardReconnecting', (shardId) => {
+    console.log(`Shard ${shardId} reconnecting...`);
+});
+
+client.on('shardResume', (shardId, replayedEvents) => {
+    console.log(`Shard ${shardId} resumed. Replayed ${replayedEvents} events.`);
 });
 
 // Login
@@ -387,4 +411,9 @@ if (!process.env.DISCORD_TOKEN || process.env.DISCORD_TOKEN === "YOUR_BOT_TOKEN_
     process.exit(1);
 }
 
-client.login(process.env.DISCORD_TOKEN);
+client.login(process.env.DISCORD_TOKEN)
+    .then(() => console.log('○ Login initiated successfully'))
+    .catch((error) => {
+        console.error('✕ Failed to login:', error.message);
+        process.exit(1);
+    });
