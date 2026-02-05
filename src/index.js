@@ -413,9 +413,22 @@ if (!process.env.DISCORD_TOKEN || process.env.DISCORD_TOKEN === "YOUR_BOT_TOKEN_
 }
 
 console.log('○ Discord token found, initiating login...');
+console.log('○ Token prefix:', process.env.DISCORD_TOKEN.substring(0, 10) + '...');
+
+// Add timeout for login
+const loginTimeout = setTimeout(() => {
+    console.error('✕ Login timeout after 30 seconds - Discord gateway not responding');
+    console.error('This usually means the token is invalid or Discord is blocking the connection');
+    process.exit(1);
+}, 30000);
+
 client.login(process.env.DISCORD_TOKEN)
-    .then(() => console.log('○ Login promise resolved successfully'))
+    .then(() => {
+        clearTimeout(loginTimeout);
+        console.log('○ Login promise resolved successfully');
+    })
     .catch((error) => {
+        clearTimeout(loginTimeout);
         console.error('✕ Failed to login:', error.message);
         console.error('Full error:', error);
         process.exit(1);
