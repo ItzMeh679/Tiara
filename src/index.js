@@ -238,6 +238,11 @@ client.on(Events.MessageCreate, async (message) => {
     const botMentioned = message.mentions.has(client.user);
     const commandUsed = message.content.toLowerCase().startsWith("!time");
 
+    // Debug logging
+    if (botMentioned || commandUsed) {
+        console.log(`◈ Message received: "${message.content.substring(0, 50)}${message.content.length > 50 ? '...' : ''}" | Mention: ${botMentioned} | Command: ${commandUsed}`);
+    }
+
     if (botMentioned || commandUsed) {
         try {
 
