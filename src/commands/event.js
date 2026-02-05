@@ -140,9 +140,9 @@ module.exports = {
                         .setRequired(true))),
 
     async autocomplete(interaction) {
-        try {
-            const focusedOption = interaction.options.getFocused(true);
+        const focusedOption = interaction.options.getFocused(true);
 
+        try {
             if (focusedOption.name === "datetime") {
                 const input = focusedOption.value.toLowerCase();
                 const now = DateTime.now();
@@ -199,32 +199,43 @@ module.exports = {
                     )
                     : suggestions;
 
-                await interaction.respond(filtered.slice(0, 25));
+                return await interaction.respond(filtered.slice(0, 25));
+            }
 
-            } else if (focusedOption.name === "timezone") {
+            if (focusedOption.name === "timezone") {
                 const cities = searchCities(focusedOption.value, 25);
-                await interaction.respond(
+                return await interaction.respond(
                     cities.map(city => ({
                         name: city.label,
                         value: city.name
                     }))
                 );
-            } else if (focusedOption.name === "chart") {
+            }
+
+            if (focusedOption.name === "chart") {
                 const guildId = interaction.guildId;
                 const charts = await getAllCharts(guildId);
                 const filtered = charts
                     .filter(c => c.name.toLowerCase().includes(focusedOption.value.toLowerCase()))
                     .slice(0, 25);
-                await interaction.respond(
+                return await interaction.respond(
                     filtered.map(chart => ({
                         name: `${chart.name} (${chart.entry_count} cities)`,
                         value: chart.name
                     }))
                 );
             }
+
+            // Fallback for unknown option
+            return await interaction.respond([]);
         } catch (error) {
             console.error("Autocomplete error:", error);
-            await interaction.respond([]);
+            // Only try to respond if not already responded
+            try {
+                await interaction.respond([]);
+            } catch (e) {
+                // Already responded, ignore
+            }
         }
     },
 
