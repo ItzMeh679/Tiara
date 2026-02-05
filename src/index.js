@@ -400,6 +400,7 @@ client.on('shardResume', (shardId, replayedEvents) => {
 });
 
 // Login
+console.log('○ Checking Discord token...');
 if (!process.env.DISCORD_TOKEN || process.env.DISCORD_TOKEN === "YOUR_BOT_TOKEN_HERE") {
     console.error("✕ Error: DISCORD_TOKEN not set in .env file!");
     console.log("\n▫ Setup Instructions:");
@@ -411,9 +412,11 @@ if (!process.env.DISCORD_TOKEN || process.env.DISCORD_TOKEN === "YOUR_BOT_TOKEN_
     process.exit(1);
 }
 
+console.log('○ Discord token found, initiating login...');
 client.login(process.env.DISCORD_TOKEN)
-    .then(() => console.log('○ Login initiated successfully'))
+    .then(() => console.log('○ Login promise resolved successfully'))
     .catch((error) => {
         console.error('✕ Failed to login:', error.message);
+        console.error('Full error:', error);
         process.exit(1);
     });
