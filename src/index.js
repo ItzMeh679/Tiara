@@ -233,7 +233,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
 });
 
 // Handle message-based commands (!time, @mentions, and AI replies)
-// Dedup cache to prevent double-processing during deploys or race conditions
+// Dedup + lock to prevent double-processing
 const processedMessages = new Set();
 
 client.on(Events.MessageCreate, async (message) => {
@@ -243,100 +243,84 @@ client.on(Events.MessageCreate, async (message) => {
     // Dedup: skip if we already processed this message
     if (processedMessages.has(message.id)) return;
     processedMessages.add(message.id);
-    // Clean up old entries every 100 messages to prevent memory leak
-    if (processedMessages.size > 100) {
+    if (processedMessages.size > 200) {
         const entries = [...processedMessages];
-        entries.slice(0, 50).forEach(id => processedMessages.delete(id));
+        entries.slice(0, 100).forEach(id => processedMessages.delete(id));
     }
 
     const botMentioned = message.mentions.has(client.user);
     const commandUsed = message.content.toLowerCase().startsWith("!time");
 
-    // Check if this is a reply to Myra's message (AI chatbot)
-    // Note: Discord auto-adds @mention when replying, so botMentioned is true on replies too
+    // Strip bot mention to get clean text
+    const mentionPattern = new RegExp(`<@!?${client.user.id}>\\s*`, "g");
+    const cleanText = message.content.replace(mentionPattern, "").trim();
+
+    // ===========================================
+    // PATH 1: Reply to Myra → AI chat (always)
+    // ===========================================
     if (message.reference) {
         try {
             const repliedMessage = await message.channel.messages.fetch(message.reference.messageId);
             if (repliedMessage.author.id === client.user.id) {
-                // This is a reply to Myra — ALWAYS handle as AI chat, never show time
-                if (!gemini.isAvailable()) {
-                    await message.reply("◷ *AI chat is currently offline — Gemini API key not configured*").catch(() => { });
-                    return;
-                }
+                if (!gemini.isAvailable() || cleanText.length === 0) return;
 
-                // Strip bot mention from the message (Discord adds it automatically on replies)
-                const mentionPattern = new RegExp(`<@!?${client.user.id}>\\s*`, "g");
-                const cleanMessage = message.content.replace(mentionPattern, "").trim();
-
-                if (cleanMessage.length === 0) return;
-
-                console.log(`◈ AI Reply from ${message.author.tag}: "${cleanMessage.substring(0, 50)}"`);
+                console.log(`◈ AI Reply from ${message.author.tag}: "${cleanText.substring(0, 50)}"`);
                 await message.channel.sendTyping();
 
-                const response = await gemini.chat(cleanMessage, {
+                const response = await gemini.chat(cleanText, {
                     userId: message.author.id,
                     username: message.author.displayName || message.author.username,
                     currentTime: new Date().toISOString(),
                     guildName: message.guild?.name || "DM",
                 });
 
-                if (response) {
-                    await message.reply(response);
-                }
-                return; // Always return — never fall through to time display
+                if (response) await message.reply(response);
+                return; // DONE — stop here
             }
         } catch (e) {
             console.error("Reply handler error:", e);
-            // Still return — do NOT fall through to the mention/time handler
-            return;
+            return; // DONE — stop here
         }
     }
 
-    // Debug logging
-    if (botMentioned || commandUsed) {
-        console.log(`◈ Message received: "${message.content.substring(0, 50)}${message.content.length > 50 ? '...' : ''}" | Mention: ${botMentioned} | Command: ${commandUsed}`);
-    }
-
-    if (botMentioned || commandUsed) {
-        // Check if the mention includes extra text that looks like a chat message
-        const mentionPattern = new RegExp(`<@!?${client.user.id}>\\s*`, "g");
-        const extraText = message.content.replace(mentionPattern, "").trim();
-
-        // If there's substantial text and it doesn't match a chart name, treat as AI chat
-        if (botMentioned && extraText.length > 0 && gemini.isAvailable()) {
-            try {
-                const guildId = message.guildId;
-                // Check if it's a chart name first
-                let isChartName = false;
-                if (guildId && extraText) {
-                    const chart = await getChart(extraText, guildId);
-                    if (chart) isChartName = true;
-                }
-
-                if (!isChartName) {
-                    // This is an AI chat message
-                    console.log(`◈ AI Chat from ${message.author.tag}: "${extraText.substring(0, 50)}..."`);
-                    await message.channel.sendTyping();
-
-                    const response = await gemini.chat(extraText, {
-                        userId: message.author.id,
-                        username: message.author.displayName || message.author.username,
-                        currentTime: new Date().toISOString(),
-                        guildName: message.guild?.name || "DM",
-                    });
-
-                    if (response) {
-                        await message.reply(response);
-                    }
-                    return;
-                }
-            } catch (aiError) {
-                console.error("AI chat error:", aiError);
-                await message.reply("◷ *something went wrong... try again in a sec*").catch(() => { });
-                return; // Don't fall through to time display
+    // ===========================================
+    // PATH 2: @mention with text → AI chat
+    // ===========================================
+    if (botMentioned && cleanText.length > 0 && gemini.isAvailable()) {
+        try {
+            const guildId = message.guildId;
+            // Check if it's a chart name first
+            let isChartName = false;
+            if (guildId) {
+                const chart = await getChart(cleanText, guildId);
+                if (chart) isChartName = true;
             }
-        }
 
+            if (!isChartName) {
+                console.log(`◈ AI Chat from ${message.author.tag}: "${cleanText.substring(0, 50)}"`);
+                await message.channel.sendTyping();
+
+                const response = await gemini.chat(cleanText, {
+                    userId: message.author.id,
+                    username: message.author.displayName || message.author.username,
+                    currentTime: new Date().toISOString(),
+                    guildName: message.guild?.name || "DM",
+                });
+
+                if (response) await message.reply(response);
+                return; // DONE — stop here
+            }
+        } catch (aiError) {
+            console.error("AI chat error:", aiError);
+            await message.reply("◷ *something went wrong... try again in a sec*").catch(() => { });
+            return; // DONE — stop here
+        }
+    }
+
+    // ===========================================
+    // PATH 3: @mention or !time with NO extra text → show time
+    // ===========================================
+    if (botMentioned || commandUsed) {
         try {
             const guildId = message.guildId;
             const timeFormat = guildId ? await getTimeFormat(guildId) : '24h';
