@@ -241,16 +241,25 @@ client.on(Events.MessageCreate, async (message) => {
     const commandUsed = message.content.toLowerCase().startsWith("!time");
 
     // Check if this is a reply to Myra's message (AI chatbot)
-    if (message.reference && !botMentioned && !commandUsed) {
+    // Note: Discord auto-adds @mention when replying, so botMentioned is true on replies too
+    if (message.reference) {
         try {
             const repliedMessage = await message.channel.messages.fetch(message.reference.messageId);
             if (repliedMessage.author.id === client.user.id && gemini.isAvailable()) {
                 // This is a reply to Myra — engage AI chatbot
-                console.log(`◈ AI Reply from ${message.author.tag}: "${message.content.substring(0, 50)}..."`);
+                // Strip bot mention from the message (Discord adds it automatically on replies)
+                const mentionPattern = new RegExp(`<@!?${client.user.id}>\\s*`, "g");
+                const cleanMessage = message.content.replace(mentionPattern, "").trim();
 
+                if (cleanMessage.length === 0) {
+                    // Empty reply, just ignore
+                    return;
+                }
+
+                console.log(`◈ AI Reply from ${message.author.tag}: "${cleanMessage.substring(0, 50)}..."`);
                 await message.channel.sendTyping();
 
-                const response = await gemini.chat(message.content, {
+                const response = await gemini.chat(cleanMessage, {
                     userId: message.author.id,
                     username: message.author.displayName || message.author.username,
                     currentTime: new Date().toISOString(),
