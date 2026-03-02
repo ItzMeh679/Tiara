@@ -1,10 +1,13 @@
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const { createClient } = require("@supabase/supabase-js");
 
-// Initialize Gemini client
+// Initialize Gemini client (primary + fallback)
 const apiKey = process.env.GEMINI_API_KEY;
+const fallbackKey = process.env.GEMINI_API_KEY_FALLBACK;
 let genAI = null;
 let model = null;
+let fallbackGenAI = null;
+let fallbackModel = null;
 
 if (apiKey) {
     genAI = new GoogleGenerativeAI(apiKey);
@@ -12,6 +15,12 @@ if (apiKey) {
     console.log("○ Gemini AI initialized (Myra online)");
 } else {
     console.warn("⚠ GEMINI_API_KEY not set — AI chat disabled");
+}
+
+if (fallbackKey) {
+    fallbackGenAI = new GoogleGenerativeAI(fallbackKey);
+    fallbackModel = fallbackGenAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+    console.log("○ Gemini fallback key loaded");
 }
 
 // Supabase for user profiles (reuse env vars)
@@ -235,7 +244,20 @@ ${recentHistory || "(first message)"}
 
 Respond as Myra. Remember to match ${username}'s texting style.`;
 
-        const result = await model.generateContent(fullPrompt);
+        // Try primary model first, fallback if it fails
+        let result;
+        try {
+            result = await model.generateContent(fullPrompt);
+        } catch (primaryError) {
+            console.error("Primary Gemini key failed:", primaryError?.message);
+            if (fallbackModel) {
+                console.log("○ Switching to fallback Gemini key...");
+                result = await fallbackModel.generateContent(fullPrompt);
+            } else {
+                throw primaryError;
+            }
+        }
+
         const response = result.response.text();
 
         // Truncate for Discord
@@ -254,7 +276,6 @@ Respond as Myra. Remember to match ${username}'s texting style.`;
         return finalResponse;
     } catch (error) {
         console.error("Gemini AI error:", error?.message || error);
-        console.error("Gemini error details:", JSON.stringify({ status: error?.status, statusText: error?.statusText, code: error?.code }, null, 2));
         return "hmm something's off with the timestream rn... try again in a sec ◷";
     }
 }
