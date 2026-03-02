@@ -21,6 +21,7 @@
     "@supabase/supabase-js": "^2.39.3",
     "discord.js": "^14.14.1",
     "dotenv": "^16.4.1",
+    "groq-sdk": "^0.37.0",
     "luxon": "^3.4.4"
   }
 }

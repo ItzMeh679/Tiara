@@ -1,26 +1,23 @@
-const { GoogleGenerativeAI } = require("@google/generative-ai");
+const Groq = require("groq-sdk");
 const { createClient } = require("@supabase/supabase-js");
 
-// Initialize Gemini client (primary + fallback)
-const apiKey = process.env.GEMINI_API_KEY;
+// Initialize Groq client (primary + fallback)
+// Groq free tier: 30 RPM, 6000 RPD — way more generous than Gemini
+const apiKey = process.env.GEMINI_API_KEY; // reusing same env var name for simplicity
 const fallbackKey = process.env.GEMINI_API_KEY_FALLBACK;
-let genAI = null;
-let model = null;
-let fallbackGenAI = null;
-let fallbackModel = null;
+let groqClient = null;
+let fallbackClient = null;
 
 if (apiKey) {
-    genAI = new GoogleGenerativeAI(apiKey);
-    model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-lite" });
-    console.log("○ Gemini AI initialized (Myra online)");
+    groqClient = new Groq({ apiKey });
+    console.log("○ Groq AI initialized (Myra online)");
 } else {
-    console.warn("⚠ GEMINI_API_KEY not set — AI chat disabled");
+    console.warn("⚠ AI API key not set — AI chat disabled");
 }
 
 if (fallbackKey) {
-    fallbackGenAI = new GoogleGenerativeAI(fallbackKey);
-    fallbackModel = fallbackGenAI.getGenerativeModel({ model: "gemini-2.0-flash-lite" });
-    console.log("○ Gemini fallback key loaded");
+    fallbackClient = new Groq({ apiKey: fallbackKey });
+    console.log("○ Groq fallback key loaded");
 }
 
 // Supabase for user profiles (reuse env vars)
@@ -85,7 +82,6 @@ You MUST match how each person talks to you:
  * Get or create a user's chat style profile from Supabase
  */
 async function getUserProfile(userId) {
-    // Check cache first
     if (styleCache.has(userId)) {
         return styleCache.get(userId);
     }
@@ -113,7 +109,6 @@ async function getUserProfile(userId) {
  */
 async function updateUserProfile(userId, username, messagesSample) {
     try {
-        // Analyze their style from recent messages
         const styleNotes = analyzeStyle(messagesSample);
 
         const profile = {
@@ -127,7 +122,7 @@ async function updateUserProfile(userId, username, messagesSample) {
         await supabase
             .from("user_chat_profiles")
             .upsert(profile, { onConflict: "user_id" })
-            .catch(() => { }); // Silent fail if table doesn't exist
+            .catch(() => { });
 
         styleCache.set(userId, profile);
     } catch (e) {
@@ -144,32 +139,26 @@ function analyzeStyle(messages) {
     const combined = messages.join(" ");
     const traits = [];
 
-    // Check case usage
     const lowerCount = messages.filter(m => m === m.toLowerCase()).length;
     if (lowerCount > messages.length * 0.7) traits.push("mostly lowercase");
     else if (lowerCount < messages.length * 0.3) traits.push("uses proper capitalization");
 
-    // Check message length
     const avgLen = combined.length / messages.length;
     if (avgLen < 30) traits.push("short/concise messages");
     else if (avgLen > 100) traits.push("writes longer messages");
 
-    // Check for slang
     const slangWords = ["lol", "lmao", "bruh", "ngl", "tbh", "fr", "lowkey", "highkey", "imo", "idk", "istg", "smh", "fam", "vibe", "bet", "cap", "sus", "no cap", "deadass", "slay", "ong", "wanna", "gonna"];
     const usedSlang = slangWords.filter(s => combined.toLowerCase().includes(s));
     if (usedSlang.length > 2) traits.push(`uses slang: ${usedSlang.slice(0, 5).join(", ")}`);
 
-    // Check for emoji usage
     const emojiMatch = combined.match(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu);
     if (emojiMatch && emojiMatch.length > 3) traits.push("uses emojis frequently");
 
-    // Check punctuation style
     const exclamations = (combined.match(/!/g) || []).length;
     const questions = (combined.match(/\?/g) || []).length;
     if (exclamations > messages.length) traits.push("enthusiastic/exclamatory");
     if (questions > messages.length) traits.push("asks lots of questions");
 
-    // Check for "..." usage
     if (combined.includes("...")) traits.push("uses ellipses");
 
     return traits.join("; ");
@@ -193,20 +182,19 @@ function addToHistory(userId, role, content) {
     const history = conversationCache.get(userId);
     history.push({ role, content, timestamp: Date.now() });
 
-    // Keep only recent messages
     if (history.length > MAX_HISTORY) {
         history.splice(0, history.length - MAX_HISTORY);
     }
 }
 
 /**
- * Chat with Myra (Gemini AI)
+ * Chat with Myra (Groq AI)
  * @param {string} userMessage - The user's message
  * @param {Object} context - Additional context
  * @returns {Promise<string|null>} Myra's response or null if unavailable
  */
 async function chat(userMessage, context = {}) {
-    if (!model) return null;
+    if (!groqClient) return null;
 
     try {
         const userId = context.userId || "unknown";
@@ -218,13 +206,10 @@ async function chat(userMessage, context = {}) {
         // Get user's style profile
         const profile = await getUserProfile(userId);
 
-        // Build conversation context
+        // Build conversation history for Groq messages format
         const history = getHistory(userId);
-        const recentHistory = history.slice(-8).map(m =>
-            `${m.role === "user" ? username : "Myra"}: ${m.content}`
-        ).join("\n");
 
-        // Build the full prompt
+        // Build context string
         const contextParts = [];
         if (context.currentTime) contextParts.push(`Current UTC time: ${context.currentTime}`);
         if (context.guildName) contextParts.push(`Server: ${context.guildName}`);
@@ -232,33 +217,55 @@ async function chat(userMessage, context = {}) {
 
         let userStyleGuide = "";
         if (profile && profile.style_notes) {
-            userStyleGuide = `\n\n## This User's Communication Style\nUsername: ${username}\nStyle traits: ${profile.style_notes}\nMessages exchanged: ${profile.message_count || 0}\nIMPORTANT: Mirror their style naturally. If they use slang, use it back. If they're casual, be casual. Match their energy.`;
+            userStyleGuide = `\n\nThis user's style: ${profile.style_notes} (${profile.message_count || 0} messages exchanged). Mirror their style naturally.`;
         }
 
-        const fullPrompt = `${MYRA_SYSTEM_PROMPT}${userStyleGuide}
+        const systemPrompt = `${MYRA_SYSTEM_PROMPT}${userStyleGuide}${contextParts.length > 0 ? "\n\nContext: " + contextParts.join(" | ") : ""}`;
 
-${contextParts.length > 0 ? "\n## Current Context\n" + contextParts.join("\n") : ""}
+        // Build messages array for Groq (OpenAI-compatible format)
+        const messages = [
+            { role: "system", content: systemPrompt }
+        ];
 
-## Recent Conversation
-${recentHistory || "(first message)"}
+        // Add recent conversation history
+        const recentHistory = history.slice(-8);
+        for (const msg of recentHistory) {
+            messages.push({
+                role: msg.role === "user" ? "user" : "assistant",
+                content: msg.content
+            });
+        }
 
-Respond as Myra. Remember to match ${username}'s texting style.`;
+        // If the last message isn't the current user message, add it
+        if (recentHistory.length === 0 || recentHistory[recentHistory.length - 1].content !== userMessage) {
+            messages.push({ role: "user", content: userMessage });
+        }
 
-        // Try primary model first, fallback if it fails
-        let result;
+        // Try primary client, fallback if it fails
+        let completion;
         try {
-            result = await model.generateContent(fullPrompt);
+            completion = await groqClient.chat.completions.create({
+                model: "llama-3.3-70b-versatile",
+                messages,
+                max_tokens: 500,
+                temperature: 0.9,
+            });
         } catch (primaryError) {
-            console.error("Primary Gemini key failed:", primaryError?.message);
-            if (fallbackModel) {
-                console.log("○ Switching to fallback Gemini key...");
-                result = await fallbackModel.generateContent(fullPrompt);
+            console.error("Primary AI key failed:", primaryError?.message);
+            if (fallbackClient) {
+                console.log("○ Switching to fallback AI key...");
+                completion = await fallbackClient.chat.completions.create({
+                    model: "llama-3.3-70b-versatile",
+                    messages,
+                    max_tokens: 500,
+                    temperature: 0.9,
+                });
             } else {
                 throw primaryError;
             }
         }
 
-        const response = result.response.text();
+        const response = completion.choices[0]?.message?.content || "";
 
         // Truncate for Discord
         let finalResponse = response;
@@ -275,16 +282,16 @@ Respond as Myra. Remember to match ${username}'s texting style.`;
 
         return finalResponse;
     } catch (error) {
-        console.error("Gemini AI error:", error?.message || error);
+        console.error("AI error:", error?.message || error);
         return "hmm something's off with the timestream rn... try again in a sec ◷";
     }
 }
 
 /**
- * Check if Gemini AI is available
+ * Check if AI is available
  */
 function isAvailable() {
-    return model !== null;
+    return groqClient !== null;
 }
 
 module.exports = {
