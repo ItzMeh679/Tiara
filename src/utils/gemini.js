@@ -11,7 +11,7 @@ let fallbackModel = null;
 
 if (apiKey) {
     genAI = new GoogleGenerativeAI(apiKey);
-    model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+    model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-lite" });
     console.log("○ Gemini AI initialized (Myra online)");
 } else {
     console.warn("⚠ GEMINI_API_KEY not set — AI chat disabled");
@@ -19,7 +19,7 @@ if (apiKey) {
 
 if (fallbackKey) {
     fallbackGenAI = new GoogleGenerativeAI(fallbackKey);
-    fallbackModel = fallbackGenAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+    fallbackModel = fallbackGenAI.getGenerativeModel({ model: "gemini-2.0-flash-lite" });
     console.log("○ Gemini fallback key loaded");
 }
 
