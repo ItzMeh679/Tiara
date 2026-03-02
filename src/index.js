@@ -245,18 +245,20 @@ client.on(Events.MessageCreate, async (message) => {
     if (message.reference) {
         try {
             const repliedMessage = await message.channel.messages.fetch(message.reference.messageId);
-            if (repliedMessage.author.id === client.user.id && gemini.isAvailable()) {
-                // This is a reply to Myra — engage AI chatbot
+            if (repliedMessage.author.id === client.user.id) {
+                // This is a reply to Myra — ALWAYS handle as AI chat, never show time
+                if (!gemini.isAvailable()) {
+                    await message.reply("◷ *AI chat is currently offline — Gemini API key not configured*").catch(() => { });
+                    return;
+                }
+
                 // Strip bot mention from the message (Discord adds it automatically on replies)
                 const mentionPattern = new RegExp(`<@!?${client.user.id}>\\s*`, "g");
                 const cleanMessage = message.content.replace(mentionPattern, "").trim();
 
-                if (cleanMessage.length === 0) {
-                    // Empty reply, just ignore
-                    return;
-                }
+                if (cleanMessage.length === 0) return;
 
-                console.log(`◈ AI Reply from ${message.author.tag}: "${cleanMessage.substring(0, 50)}..."`);
+                console.log(`◈ AI Reply from ${message.author.tag}: "${cleanMessage.substring(0, 50)}"`);
                 await message.channel.sendTyping();
 
                 const response = await gemini.chat(cleanMessage, {
@@ -269,10 +271,12 @@ client.on(Events.MessageCreate, async (message) => {
                 if (response) {
                     await message.reply(response);
                 }
-                return;
+                return; // Always return — never fall through to time display
             }
         } catch (e) {
-            // Not a reply to us or message deleted, continue
+            console.error("Reply handler error:", e);
+            // Still return — do NOT fall through to the mention/time handler
+            return;
         }
     }
 

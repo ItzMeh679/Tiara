@@ -253,7 +253,8 @@ Respond as Myra. Remember to match ${username}'s texting style.`;
 
         return finalResponse;
     } catch (error) {
-        console.error("Gemini AI error:", error);
+        console.error("Gemini AI error:", error?.message || error);
+        console.error("Gemini error details:", JSON.stringify({ status: error?.status, statusText: error?.statusText, code: error?.code }, null, 2));
         return "hmm something's off with the timestream rn... try again in a sec ◷";
     }
 }
