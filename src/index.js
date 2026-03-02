@@ -36,9 +36,10 @@ server.listen(PORT, () => {
 });
 
 const { getDefaultTimeList, generateTimeList, generateInlineFields, DEFAULT_TIME_ZONES, formatEventForMultipleTimezones } = require("./utils/timezones");
-const { getChart, getChartEntries, getDefaultChartId, getTimeFormat, getChartById, getUpcomingEventsForChart } = require("./utils/database");
+const { getChart, getChartEntries, getDefaultChartId, getTimeFormat, getChartById, getUpcomingEventsForChart, getActiveWorldclocks, removeWorldclock, getDueReminders, markReminderFired } = require("./utils/database");
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require("discord.js");
 const { DateTime } = require("luxon");
+const gemini = require("./utils/gemini");
 
 // Create client
 const client = new Client({
@@ -231,7 +232,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
     }
 });
 
-// Handle message-based commands (!time and @mentions)
+// Handle message-based commands (!time, @mentions, and AI replies)
 client.on(Events.MessageCreate, async (message) => {
     // Ignore bot messages
     if (message.author.bot) return;
@@ -239,14 +240,73 @@ client.on(Events.MessageCreate, async (message) => {
     const botMentioned = message.mentions.has(client.user);
     const commandUsed = message.content.toLowerCase().startsWith("!time");
 
+    // Check if this is a reply to Myra's message (AI chatbot)
+    if (message.reference && !botMentioned && !commandUsed) {
+        try {
+            const repliedMessage = await message.channel.messages.fetch(message.reference.messageId);
+            if (repliedMessage.author.id === client.user.id && gemini.isAvailable()) {
+                // This is a reply to Myra — engage AI chatbot
+                console.log(`◈ AI Reply from ${message.author.tag}: "${message.content.substring(0, 50)}..."`);
+
+                await message.channel.sendTyping();
+
+                const response = await gemini.chat(message.content, {
+                    userId: message.author.id,
+                    username: message.author.displayName || message.author.username,
+                    currentTime: new Date().toISOString(),
+                    guildName: message.guild?.name || "DM",
+                });
+
+                if (response) {
+                    await message.reply(response);
+                }
+                return;
+            }
+        } catch (e) {
+            // Not a reply to us or message deleted, continue
+        }
+    }
+
     // Debug logging
     if (botMentioned || commandUsed) {
         console.log(`◈ Message received: "${message.content.substring(0, 50)}${message.content.length > 50 ? '...' : ''}" | Mention: ${botMentioned} | Command: ${commandUsed}`);
     }
 
     if (botMentioned || commandUsed) {
-        try {
+        // Check if the mention includes extra text that looks like a chat message
+        const mentionPattern = new RegExp(`<@!?${client.user.id}>\\s*`, "g");
+        const extraText = message.content.replace(mentionPattern, "").trim();
 
+        // If there's substantial text and it doesn't match a chart name, treat as AI chat
+        if (botMentioned && extraText.length > 0 && gemini.isAvailable()) {
+            const guildId = message.guildId;
+            // Check if it's a chart name first
+            let isChartName = false;
+            if (guildId && extraText) {
+                const chart = await getChart(extraText, guildId);
+                if (chart) isChartName = true;
+            }
+
+            if (!isChartName) {
+                // This is an AI chat message
+                console.log(`◈ AI Chat from ${message.author.tag}: "${extraText.substring(0, 50)}..."`);
+                await message.channel.sendTyping();
+
+                const response = await gemini.chat(extraText, {
+                    userId: message.author.id,
+                    username: message.author.displayName || message.author.username,
+                    currentTime: new Date().toISOString(),
+                    guildName: message.guild?.name || "DM",
+                });
+
+                if (response) {
+                    await message.reply(response);
+                }
+                return;
+            }
+        }
+
+        try {
             const guildId = message.guildId;
             const timeFormat = guildId ? await getTimeFormat(guildId) : '24h';
             const view = 'detailed';
@@ -258,8 +318,7 @@ client.on(Events.MessageCreate, async (message) => {
 
             // Check if mentioning with a chart name (e.g., "@Myra times")
             if (botMentioned) {
-                const mentionPattern = new RegExp(`<@!?${client.user.id}>\\s*`, "g");
-                const chartName = message.content.replace(mentionPattern, "").trim();
+                const chartName = extraText;
 
                 if (chartName && guildId) {
                     const chart = await getChart(chartName, guildId);
@@ -376,6 +435,117 @@ client.once(Events.ClientReady, (c) => {
     console.log(`\n○ Invite URL:`);
     console.log(`https://discord.com/api/oauth2/authorize?client_id=${c.user.id}&permissions=2147485696&scope=bot%20applications.commands\n`);
     console.log(`○ Bot is fully ready and listening for events!`);
+
+    // ============================================
+    // Worldclock Auto-Update (every 60 seconds)
+    // ============================================
+    setInterval(async () => {
+        try {
+            const worldclocks = await getActiveWorldclocks();
+            if (worldclocks.length === 0) return;
+
+            for (const wc of worldclocks) {
+                try {
+                    const channel = await client.channels.fetch(wc.channel_id);
+                    if (!channel) {
+                        await removeWorldclock(wc.guild_id, wc.channel_id);
+                        continue;
+                    }
+
+                    const msg = await channel.messages.fetch(wc.message_id);
+                    if (!msg) {
+                        await removeWorldclock(wc.guild_id, wc.channel_id);
+                        continue;
+                    }
+
+                    // Get chart entries or defaults
+                    let entries = DEFAULT_TIME_ZONES;
+                    let title = "◷ World Clock ─ Live";
+                    const timeFormat = await getTimeFormat(wc.guild_id);
+
+                    if (wc.chart_id) {
+                        const chartEntries = await getChartEntries(wc.chart_id);
+                        if (chartEntries && chartEntries.length > 0) {
+                            entries = chartEntries;
+                            const chartInfo = await getChartById(wc.chart_id);
+                            if (chartInfo) title = `◷ ${chartInfo.name} ─ Live`;
+                        }
+                    }
+
+                    const embed = new EmbedBuilder()
+                        .setColor(0x5865f2)
+                        .setTitle(title)
+                        .setDescription(generateTimeList(entries, timeFormat, "detailed"))
+                        .setFooter({ text: "◷ Auto-updates every 60 seconds │ /worldclock stop to disable" })
+                        .setTimestamp();
+
+                    await msg.edit({ embeds: [embed] });
+                } catch (err) {
+                    // Message deleted or channel inaccessible — clean up
+                    if (err.code === 10008 || err.code === 10003 || err.code === 50001) {
+                        await removeWorldclock(wc.guild_id, wc.channel_id).catch(() => { });
+                    }
+                }
+            }
+        } catch (error) {
+            console.error("Worldclock update error:", error);
+        }
+    }, 60000); // Every 60 seconds
+
+    console.log("○ Worldclock auto-update interval started (60s)");
+
+    // ============================================
+    // Reminder Check (every 30 seconds)
+    // ============================================
+    setInterval(async () => {
+        try {
+            const dueReminders = await getDueReminders();
+            if (dueReminders.length === 0) return;
+
+            for (const reminder of dueReminders) {
+                try {
+                    // Mark as fired immediately to prevent duplicates
+                    await markReminderFired(reminder.id);
+
+                    // Try to DM the user
+                    const user = await client.users.fetch(reminder.user_id);
+                    if (user) {
+                        const remindTime = DateTime.fromISO(reminder.remind_at).setZone(reminder.timezone);
+
+                        const embed = new EmbedBuilder()
+                            .setColor(0xfee75c)
+                            .setTitle("⏰ Reminder!")
+                            .setDescription(`**${reminder.reminder_text}**`)
+                            .addFields(
+                                { name: "◷ Set For", value: remindTime.toFormat("EEE, MMM d 'at' h:mm a"), inline: true },
+                                { name: "▪ Timezone", value: reminder.timezone, inline: true }
+                            )
+                            .setFooter({ text: "Set with /remind" })
+                            .setTimestamp();
+
+                        await user.send({ embeds: [embed] }).catch(() => {
+                            // If DMs are closed, try sending in the original channel
+                            if (reminder.channel_id) {
+                                client.channels.fetch(reminder.channel_id).then(channel => {
+                                    if (channel) {
+                                        channel.send({ content: `<@${reminder.user_id}>`, embeds: [embed] }).catch(() => { });
+                                    }
+                                }).catch(() => { });
+                            }
+                        });
+
+                        console.log(`⏰ Reminder fired for ${user.tag}: "${reminder.reminder_text}"`);
+                    }
+                } catch (err) {
+                    console.error(`Reminder ${reminder.id} error:`, err);
+                }
+            }
+        } catch (error) {
+            console.error("Reminder check error:", error);
+        }
+    }, 30000); // Every 30 seconds
+
+    console.log("○ Reminder check interval started (30s)");
 });
 
 // Handle errors

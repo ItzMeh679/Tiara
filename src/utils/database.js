@@ -382,6 +382,230 @@ async function getUpcomingEventsForChart(guildId, chartId = null, hoursAhead = 1
   return data || [];
 }
 
+// ============================================
+// Worldclock Functions
+// ============================================
+
+/**
+ * Save a worldclock live message
+ * @param {string} guildId - Guild ID
+ * @param {string} channelId - Channel ID
+ * @param {string} messageId - Message ID
+ * @param {number|null} chartId - Optional chart ID
+ * @param {string} createdBy - User who started it
+ */
+async function addWorldclock(guildId, channelId, messageId, chartId, createdBy) {
+  const { data, error } = await supabase
+    .from("worldclock_messages")
+    .upsert({
+      guild_id: guildId,
+      channel_id: channelId,
+      message_id: messageId,
+      chart_id: chartId,
+      created_by: createdBy
+    }, { onConflict: "guild_id,channel_id" })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * Remove a worldclock from a channel
+ * @param {string} guildId - Guild ID
+ * @param {string} channelId - Channel ID
+ */
+async function removeWorldclock(guildId, channelId) {
+  const { data, error } = await supabase
+    .from("worldclock_messages")
+    .delete()
+    .eq("guild_id", guildId)
+    .eq("channel_id", channelId)
+    .select();
+
+  if (error) throw error;
+  return { success: data && data.length > 0, deleted: data?.[0] };
+}
+
+/**
+ * Get all active worldclock messages
+ * @returns {Promise<Array>} Array of worldclock entries
+ */
+async function getActiveWorldclocks() {
+  const { data, error } = await supabase
+    .from("worldclock_messages")
+    .select("*");
+
+  if (error) throw error;
+  return data || [];
+}
+
+// ============================================
+// Reminder Functions
+// ============================================
+
+/**
+ * Add a user reminder
+ * @param {string} userId - Discord user ID
+ * @param {string|null} guildId - Guild ID where set
+ * @param {string|null} channelId - Channel ID where set
+ * @param {string} reminderText - Reminder message
+ * @param {Date} remindAt - When to fire
+ * @param {string} timezone - User's timezone
+ */
+async function addReminder(userId, guildId, channelId, reminderText, remindAt, timezone) {
+  const { data, error } = await supabase
+    .from("user_reminders")
+    .insert({
+      user_id: userId,
+      guild_id: guildId,
+      channel_id: channelId,
+      reminder_text: reminderText,
+      remind_at: remindAt.toISOString(),
+      timezone
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * Get pending reminders for a user
+ * @param {string} userId - Discord user ID
+ */
+async function getUserReminders(userId) {
+  const { data, error } = await supabase
+    .from("user_reminders")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("fired", false)
+    .order("remind_at", { ascending: true });
+
+  if (error) throw error;
+  return data || [];
+}
+
+/**
+ * Cancel a reminder
+ * @param {number} reminderId - Reminder ID
+ * @param {string} userId - User ID for verification
+ */
+async function cancelReminder(reminderId, userId) {
+  const { data, error } = await supabase
+    .from("user_reminders")
+    .delete()
+    .eq("id", reminderId)
+    .eq("user_id", userId)
+    .select();
+
+  if (error) throw error;
+  return { success: data && data.length > 0, deleted: data?.[0] };
+}
+
+/**
+ * Get all due (unfired) reminders
+ * @returns {Promise<Array>} Reminders that should fire now
+ */
+async function getDueReminders() {
+  const { data, error } = await supabase
+    .from("user_reminders")
+    .select("*")
+    .eq("fired", false)
+    .lte("remind_at", new Date().toISOString());
+
+  if (error) throw error;
+  return data || [];
+}
+
+/**
+ * Mark a reminder as fired
+ * @param {number} reminderId - Reminder ID
+ */
+async function markReminderFired(reminderId) {
+  const { error } = await supabase
+    .from("user_reminders")
+    .update({ fired: true })
+    .eq("id", reminderId);
+
+  if (error) throw error;
+}
+
+// ============================================
+// User Uptime Functions
+// ============================================
+
+/**
+ * Set user's uptime/awake hours
+ * @param {string} userId - Discord user ID
+ * @param {string} timezone - IANA timezone
+ * @param {string} cityLabel - City display label
+ * @param {number} awakeStart - Hour (0-23) when user wakes
+ * @param {number} awakeEnd - Hour (0-23) when user sleeps
+ */
+async function setUserUptime(userId, timezone, cityLabel, awakeStart, awakeEnd) {
+  const { data, error } = await supabase
+    .from("user_uptime")
+    .upsert({
+      user_id: userId,
+      timezone,
+      city_label: cityLabel,
+      awake_start: awakeStart,
+      awake_end: awakeEnd,
+      updated_at: new Date().toISOString()
+    }, { onConflict: "user_id" })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * Get a user's uptime settings
+ * @param {string} userId - Discord user ID
+ */
+async function getUserUptime(userId) {
+  const { data, error } = await supabase
+    .from("user_uptime")
+    .select("*")
+    .eq("user_id", userId)
+    .single();
+
+  if (error && error.code !== "PGRST116") throw error;
+  return data || null;
+}
+
+/**
+ * Get uptime for multiple users
+ * @param {string[]} userIds - Array of user IDs
+ */
+async function getUptimeForUsers(userIds) {
+  if (!userIds || userIds.length === 0) return [];
+
+  const { data, error } = await supabase
+    .from("user_uptime")
+    .select("*")
+    .in("user_id", userIds);
+
+  if (error) throw error;
+  return data || [];
+}
+
+/**
+ * Get all uptime entries (for server-wide whoisawake)
+ */
+async function getAllUptime() {
+  const { data, error } = await supabase
+    .from("user_uptime")
+    .select("*");
+
+  if (error) throw error;
+  return data || [];
+}
+
 module.exports = {
   supabase,
   getOrCreateChart,
@@ -403,4 +627,19 @@ module.exports = {
   getEventById,
   removeEvent,
   getUpcomingEventsForChart,
+  // Worldclock functions
+  addWorldclock,
+  removeWorldclock,
+  getActiveWorldclocks,
+  // Reminder functions
+  addReminder,
+  getUserReminders,
+  cancelReminder,
+  getDueReminders,
+  markReminderFired,
+  // Uptime functions
+  setUserUptime,
+  getUserUptime,
+  getUptimeForUsers,
+  getAllUptime,
 };
