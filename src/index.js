@@ -288,30 +288,36 @@ client.on(Events.MessageCreate, async (message) => {
 
         // If there's substantial text and it doesn't match a chart name, treat as AI chat
         if (botMentioned && extraText.length > 0 && gemini.isAvailable()) {
-            const guildId = message.guildId;
-            // Check if it's a chart name first
-            let isChartName = false;
-            if (guildId && extraText) {
-                const chart = await getChart(extraText, guildId);
-                if (chart) isChartName = true;
-            }
-
-            if (!isChartName) {
-                // This is an AI chat message
-                console.log(`◈ AI Chat from ${message.author.tag}: "${extraText.substring(0, 50)}..."`);
-                await message.channel.sendTyping();
-
-                const response = await gemini.chat(extraText, {
-                    userId: message.author.id,
-                    username: message.author.displayName || message.author.username,
-                    currentTime: new Date().toISOString(),
-                    guildName: message.guild?.name || "DM",
-                });
-
-                if (response) {
-                    await message.reply(response);
+            try {
+                const guildId = message.guildId;
+                // Check if it's a chart name first
+                let isChartName = false;
+                if (guildId && extraText) {
+                    const chart = await getChart(extraText, guildId);
+                    if (chart) isChartName = true;
                 }
-                return;
+
+                if (!isChartName) {
+                    // This is an AI chat message
+                    console.log(`◈ AI Chat from ${message.author.tag}: "${extraText.substring(0, 50)}..."`);
+                    await message.channel.sendTyping();
+
+                    const response = await gemini.chat(extraText, {
+                        userId: message.author.id,
+                        username: message.author.displayName || message.author.username,
+                        currentTime: new Date().toISOString(),
+                        guildName: message.guild?.name || "DM",
+                    });
+
+                    if (response) {
+                        await message.reply(response);
+                    }
+                    return;
+                }
+            } catch (aiError) {
+                console.error("AI chat error:", aiError);
+                await message.reply("◷ *something went wrong... try again in a sec*").catch(() => { });
+                return; // Don't fall through to time display
             }
         }
 
