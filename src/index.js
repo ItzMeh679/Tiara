@@ -233,9 +233,21 @@ client.on(Events.InteractionCreate, async (interaction) => {
 });
 
 // Handle message-based commands (!time, @mentions, and AI replies)
+// Dedup cache to prevent double-processing during deploys or race conditions
+const processedMessages = new Set();
+
 client.on(Events.MessageCreate, async (message) => {
     // Ignore bot messages
     if (message.author.bot) return;
+
+    // Dedup: skip if we already processed this message
+    if (processedMessages.has(message.id)) return;
+    processedMessages.add(message.id);
+    // Clean up old entries every 100 messages to prevent memory leak
+    if (processedMessages.size > 100) {
+        const entries = [...processedMessages];
+        entries.slice(0, 50).forEach(id => processedMessages.delete(id));
+    }
 
     const botMentioned = message.mentions.has(client.user);
     const commandUsed = message.content.toLowerCase().startsWith("!time");
