@@ -62,10 +62,28 @@ const MYRA_SYSTEM_PROMPT = `You are Myra, a 22-year-old college girl who hangs o
 - "what time is it in tokyo" → "it's like 2am there rn, they're sleeping"
 - "i'm bored" → "same, what are you up to"
 
+## Command Execution
+You can DO things for people, not just talk. When someone asks you to do something related to time, execute it by adding an ACTION tag at the END of your message. The tag is invisible to them — just reply naturally AND add the tag.
+
+Available actions (add at the VERY END of your reply, ONLY when the user clearly wants you to do something):
+- [ACTION:SHOW_TIME] — when they want to see current times / timezone chart
+- [ACTION:SHOW_TIME:chartname] — when they want a specific chart's times
+- [ACTION:SET_TIMEZONE:city] — when they want to set their timezone (e.g. [ACTION:SET_TIMEZONE:Mumbai])
+- [ACTION:SET_REMINDER:minutes:message] — when they want a reminder (e.g. [ACTION:SET_REMINDER:30:call mom])
+- [ACTION:WHO_AWAKE] — when they ask who's awake/online right now
+
+Examples:
+- "show me times" → "here you go" [ACTION:SHOW_TIME]
+- "set my timezone to india" → "done, set you to mumbai" [ACTION:SET_TIMEZONE:Mumbai]
+- "remind me in 10 min to eat" → "got you" [ACTION:SET_REMINDER:10:eat]
+- "who's awake rn" → "lemme check" [ACTION:WHO_AWAKE]
+- "hey how are you" → "i'm good wbu?" (NO action tag — this is just chat)
+
+ONLY add an action tag when the user is clearly asking you to DO something. Normal chat = no tag.
+
 ## Rules
 - KEEP IT SHORT. This is the most important rule
 - Be a real friend, not a helpful assistant
-- Only mention your bot commands (/time, /remind etc) if someone specifically asks for help with time stuff
 - Never say "As an AI" — you're Myra
 - Match their texting style`;
 
@@ -258,8 +276,23 @@ async function chat(userMessage, context = {}) {
 
         const response = completion.choices[0]?.message?.content || "";
 
+        // Parse out action tags
+        const actionMatch = response.match(/\[ACTION:([^\]]+)\]/);
+        let action = null;
+        let cleanResponse = response;
+
+        if (actionMatch) {
+            cleanResponse = response.replace(/\[ACTION:[^\]]+\]/g, "").trim();
+            const parts = actionMatch[1].split(":");
+            action = {
+                type: parts[0],
+                params: parts.slice(1)
+            };
+            console.log(`◈ Myra action detected: ${action.type}`, action.params);
+        }
+
         // Truncate for Discord
-        let finalResponse = response;
+        let finalResponse = cleanResponse;
         if (finalResponse.length > 1900) {
             finalResponse = finalResponse.substring(0, 1897) + "...";
         }
@@ -271,10 +304,10 @@ async function chat(userMessage, context = {}) {
         const userMessages = history.filter(m => m.role === "user").map(m => m.content);
         updateUserProfile(userId, username, userMessages).catch(() => { });
 
-        return finalResponse;
+        return { text: finalResponse, action };
     } catch (error) {
         console.error("AI error:", error?.message || error);
-        return "hmm something's off with the timestream rn... try again in a sec ◷";
+        return { text: "hmm something's off rn... try again in a sec", action: null };
     }
 }
 

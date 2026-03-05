@@ -1,4 +1,4 @@
-// Rebuild: 2026-03-02
+// Rebuild: 2026-03-05
 require("dotenv").config();
 const {
     Client,
@@ -6,10 +6,18 @@ const {
     Collection,
     Events,
     EmbedBuilder,
+    ActionRowBuilder,
+    ButtonBuilder,
+    ButtonStyle,
 } = require("discord.js");
 const fs = require("fs");
 const path = require("path");
 const http = require("http");
+const { DateTime } = require("luxon");
+
+const { getDefaultTimeList, generateTimeList, generateInlineFields, DEFAULT_TIME_ZONES, formatEventForMultipleTimezones, lookupCity } = require("./utils/timezones");
+const { getChart, getChartEntries, getDefaultChartId, getTimeFormat, getChartById, getUpcomingEventsForChart, getActiveWorldclocks, removeWorldclock, getDueReminders, markReminderFired, setUserUptime, addReminder } = require("./utils/database");
+const gemini = require("./utils/gemini");
 
 // ============================================
 // HTTP Server for Render (keeps bot alive)
@@ -35,13 +43,9 @@ server.listen(PORT, () => {
     console.log(`○ Health server running on port ${PORT}`);
 });
 
-const { getDefaultTimeList, generateTimeList, generateInlineFields, DEFAULT_TIME_ZONES, formatEventForMultipleTimezones } = require("./utils/timezones");
-const { getChart, getChartEntries, getDefaultChartId, getTimeFormat, getChartById, getUpcomingEventsForChart, getActiveWorldclocks, removeWorldclock, getDueReminders, markReminderFired } = require("./utils/database");
-const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require("discord.js");
-const { DateTime } = require("luxon");
-const gemini = require("./utils/gemini");
-
-// Create client
+// ============================================
+// Create Discord Client
+// ============================================
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
@@ -50,7 +54,9 @@ const client = new Client({
     ],
 });
 
-// Load commands
+// ============================================
+// Load Commands
+// ============================================
 client.commands = new Collection();
 const commandsPath = path.join(__dirname, "commands");
 const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith(".js"));
@@ -63,7 +69,170 @@ for (const file of commandFiles) {
     }
 }
 
-// Handle slash commands and autocomplete
+// ============================================
+// Helper: Generate Event Tags
+// ============================================
+function generateEventTags(events, timeFormat) {
+    if (!events || events.length === 0) return null;
+    const tags = events.slice(0, 5).map(event => {
+        const time = DateTime.fromISO(event.event_time).setZone(event.timezone);
+        const now = DateTime.now();
+        const isToday = time.hasSame(now, "day");
+        const isTomorrow = time.hasSame(now.plus({ days: 1 }), "day");
+        let dateLabel = time.toFormat("MMM d");
+        if (isToday) dateLabel = "Today";
+        else if (isTomorrow) dateLabel = "Tomorrow";
+        const timeStr = timeFormat === '12h' ? time.toFormat("h:mm a") : time.toFormat("HH:mm");
+        return `▸ **${event.name}** · ${dateLabel} │ \`${timeStr}\``;
+    });
+    let result = tags.join("\n");
+    if (events.length > 5) result += `\n_+${events.length - 5} more events..._`;
+    return result;
+}
+
+// ============================================
+// Helper: Send Time Embed
+// ============================================
+async function sendTimeEmbed(message, requestedChartName = null) {
+    try {
+        const guildId = message.guildId;
+        const timeFormat = guildId ? await getTimeFormat(guildId) : '24h';
+        const view = 'detailed';
+
+        let title = "◷ World Times";
+        let entries = DEFAULT_TIME_ZONES;
+        let chartId = null;
+        let footer = "Times update in real-time │ Use buttons to refresh";
+
+        if (requestedChartName && guildId) {
+            const chart = await getChart(requestedChartName, guildId);
+            if (chart) {
+                const chartEntries = await getChartEntries(chart.id);
+                if (chartEntries && chartEntries.length > 0) {
+                    title = `◈ ${chart.name}`;
+                    entries = chartEntries;
+                    chartId = chart.id;
+                }
+            }
+        }
+
+        // If no specific chart found, use default chart
+        if (!chartId && guildId) {
+            const defaultChartId = await getDefaultChartId(guildId);
+            if (defaultChartId) {
+                const chartEntries = await getChartEntries(defaultChartId);
+                if (chartEntries && chartEntries.length > 0) {
+                    const chartInfo = await getChartById(defaultChartId);
+                    if (chartInfo) {
+                        title = `◷ ${chartInfo.name}`;
+                        entries = chartEntries;
+                        chartId = defaultChartId;
+                    }
+                }
+            }
+        }
+
+        // Generate event tags
+        let eventTagsStr = null;
+        if (guildId) {
+            const upcomingEvents = await getUpcomingEventsForChart(guildId, chartId);
+            if (upcomingEvents && upcomingEvents.length > 0) {
+                const now = DateTime.now();
+                const tags = upcomingEvents.slice(0, 3).map(event => {
+                    const time = DateTime.fromISO(event.event_time).setZone(event.timezone);
+                    const isToday = time.hasSame(now, "day");
+                    const isTomorrow = time.hasSame(now.plus({ days: 1 }), "day");
+                    let dateLabel = time.toFormat("MMM d");
+                    if (isToday) dateLabel = "Today";
+                    else if (isTomorrow) dateLabel = "Tomorrow";
+
+                    if (entries && entries.length > 0 && chartId) {
+                        const multiTz = formatEventForMultipleTimezones(
+                            event.event_time, event.timezone,
+                            entries.map(e => ({ label: e.label, zone: e.zone })), timeFormat
+                        );
+                        return `▸ **${event.name}** · ${dateLabel}\n${multiTz}`;
+                    } else {
+                        const timeStr = timeFormat === '12h' ? time.toFormat("h:mm a") : time.toFormat("HH:mm");
+                        return `▸ **${event.name}** · ${dateLabel} │ \`${timeStr}\``;
+                    }
+                });
+                eventTagsStr = tags.join("\n\n");
+                if (upcomingEvents.length > 3) eventTagsStr += `\n\n_+${upcomingEvents.length - 3} more events..._`;
+            }
+        }
+
+        const embed = new EmbedBuilder().setColor(0x5865f2).setTitle(title).setFooter({ text: footer }).setTimestamp();
+        let desc = generateTimeList(entries, timeFormat, view);
+        if (eventTagsStr) desc = eventTagsStr + "\n\n───────────────\n\n" + desc;
+        embed.setDescription(desc);
+
+        const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`refresh_time_${view}_${chartId || 'default'}`).setLabel("↻ Refresh").setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId(`view_compact_${chartId || 'default'}`).setLabel("◇ Compact").setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId(`view_detailed_${chartId || 'default'}`).setLabel("◈ Detailed").setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId(`view_grid_${chartId || 'default'}`).setLabel("▦ Grid").setStyle(ButtonStyle.Secondary)
+        );
+
+        await message.reply({ embeds: [embed], components: [row] });
+    } catch (error) {
+        console.error("Error sending time embed:", error);
+    }
+}
+
+// ============================================
+// Helper: Handle AI Actions
+// ============================================
+async function handleAiAction(action, message, client) {
+    if (!action) return;
+    try {
+        const { type, params } = action;
+        const userId = message.author.id;
+
+        if (type === "SHOW_TIME") {
+            const chartName = params[0] || null;
+            await sendTimeEmbed(message, chartName);
+        } else if (type === "SET_TIMEZONE") {
+            const cityName = params[0];
+            const cityInfo = lookupCity(cityName);
+            if (cityInfo) {
+                await setUserUptime(userId, cityInfo.zone, cityInfo.label, 8, 22); // Default 8am to 10pm
+                await message.reply(`✓ Automatically set your timezone to **${cityInfo.label}** (awake 8 AM - 10 PM) for \`/whoisawake\`.`);
+            }
+        } else if (type === "SET_REMINDER") {
+            const minutes = parseInt(params[0]);
+            const reminderText = params.slice(1).join(":");
+            if (!isNaN(minutes) && reminderText) {
+                // Default to UTC for AI logic, users can use slash command for full timezone control
+                const remindAt = DateTime.now().setZone("UTC").plus({ minutes }).toJSDate();
+                await addReminder(userId, message.guildId, message.channel.id, reminderText, remindAt, "UTC");
+                await message.reply(`⏰ Reminder set for **${minutes} minutes** from now!`);
+            }
+        } else if (type === "WHO_AWAKE") {
+            const cmd = client.commands.get("whoisawake");
+            if (cmd) {
+                // Mock interaction to trigger the existing slash command
+                const mockInteraction = {
+                    isCommand: () => true,
+                    commandName: "whoisawake",
+                    user: message.author,
+                    guild: message.guild,
+                    guildId: message.guildId,
+                    channelId: message.channel.id,
+                    options: { getString: () => null },
+                    reply: async (payload) => await message.reply(payload)
+                };
+                await cmd.execute(mockInteraction);
+            }
+        }
+    } catch (e) {
+        console.error("AI action execution error:", e);
+    }
+}
+
+// ============================================
+// Handle Slash Commands and Autocomplete
+// ============================================
 client.on(Events.InteractionCreate, async (interaction) => {
     // Handle autocomplete interactions
     if (interaction.isAutocomplete()) {
@@ -90,30 +259,6 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
             // Handle refresh and view change buttons
             if (customId.startsWith("refresh_time_") || customId.startsWith("view_")) {
-                const { generateTimeList, generateInlineFields, DEFAULT_TIME_ZONES } = require("./utils/timezones");
-                const { getChartEntries, getChartById, getTimeFormat, getUpcomingEventsForChart } = require("./utils/database");
-                const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require("discord.js");
-                const { DateTime } = require("luxon");
-
-                // Helper function for event tags
-                function generateEventTags(events, timeFormat) {
-                    if (!events || events.length === 0) return null;
-                    const tags = events.slice(0, 5).map(event => {
-                        const time = DateTime.fromISO(event.event_time).setZone(event.timezone);
-                        const now = DateTime.now();
-                        const isToday = time.hasSame(now, "day");
-                        const isTomorrow = time.hasSame(now.plus({ days: 1 }), "day");
-                        let dateLabel = time.toFormat("MMM d");
-                        if (isToday) dateLabel = "Today";
-                        else if (isTomorrow) dateLabel = "Tomorrow";
-                        const timeStr = timeFormat === '12h' ? time.toFormat("h:mm a") : time.toFormat("HH:mm");
-                        return `▸ **${event.name}** · ${dateLabel} │ \`${timeStr}\``;
-                    });
-                    let result = tags.join("\n");
-                    if (events.length > 5) result += `\n_+${events.length - 5} more events..._`;
-                    return result;
-                }
-
                 let view = "detailed";
                 let chartId = null;
 
@@ -232,7 +377,9 @@ client.on(Events.InteractionCreate, async (interaction) => {
     }
 });
 
-// Handle message-based commands (!time, @mentions, and AI replies)
+// ============================================
+// Handle Message-based Commands (@mentions, !time, AI replies)
+// ============================================
 // Dedup + lock to prevent double-processing
 const processedMessages = new Set();
 
@@ -267,14 +414,17 @@ client.on(Events.MessageCreate, async (message) => {
                 console.log(`◈ AI Reply from ${message.author.tag}: "${cleanText.substring(0, 50)}"`);
                 await message.channel.sendTyping();
 
-                const response = await gemini.chat(cleanText, {
+                const result = await gemini.chat(cleanText, {
                     userId: message.author.id,
                     username: message.author.displayName || message.author.username,
                     currentTime: new Date().toISOString(),
                     guildName: message.guild?.name || "DM",
                 });
 
-                if (response) await message.reply(response);
+                if (result) {
+                    if (result.text) await message.reply(result.text);
+                    if (result.action) await handleAiAction(result.action, message, client);
+                }
                 return; // DONE — stop here
             }
         } catch (e) {
@@ -300,14 +450,17 @@ client.on(Events.MessageCreate, async (message) => {
                 console.log(`◈ AI Chat from ${message.author.tag}: "${cleanText.substring(0, 50)}"`);
                 await message.channel.sendTyping();
 
-                const response = await gemini.chat(cleanText, {
+                const result = await gemini.chat(cleanText, {
                     userId: message.author.id,
                     username: message.author.displayName || message.author.username,
                     currentTime: new Date().toISOString(),
                     guildName: message.guild?.name || "DM",
                 });
 
-                if (response) await message.reply(response);
+                if (result) {
+                    if (result.text) await message.reply(result.text);
+                    if (result.action) await handleAiAction(result.action, message, client);
+                }
                 return; // DONE — stop here
             }
         } catch (aiError) {
@@ -321,128 +474,15 @@ client.on(Events.MessageCreate, async (message) => {
     // PATH 3: @mention or !time with NO extra text → show time
     // ===========================================
     if (botMentioned || commandUsed) {
-        try {
-            const guildId = message.guildId;
-            const timeFormat = guildId ? await getTimeFormat(guildId) : '24h';
-            const view = 'detailed';
-
-            let title = "◷ World Times";
-            let entries = DEFAULT_TIME_ZONES;
-            let chartId = null;
-            let footer = "Times update in real-time │ Use buttons to refresh";
-
-            // Check if mentioning with a chart name (e.g., "@Myra times")
-            if (botMentioned) {
-                const chartName = extraText;
-
-                if (chartName && guildId) {
-                    const chart = await getChart(chartName, guildId);
-                    if (chart) {
-                        const chartEntries = await getChartEntries(chart.id);
-                        if (chartEntries && chartEntries.length > 0) {
-                            title = `◈ ${chart.name}`;
-                            entries = chartEntries;
-                            chartId = chart.id;
-                        }
-                    }
-                }
-            }
-
-            // If no specific chart found, use default chart
-            if (!chartId && guildId) {
-                const defaultChartId = await getDefaultChartId(guildId);
-                if (defaultChartId) {
-                    const chartEntries = await getChartEntries(defaultChartId);
-                    if (chartEntries && chartEntries.length > 0) {
-                        const chartInfo = await getChartById(defaultChartId);
-                        if (chartInfo) {
-                            title = `◷ ${chartInfo.name}`;
-                            entries = chartEntries;
-                            chartId = defaultChartId;
-                        }
-                    }
-                }
-            }
-
-            // Generate event tags
-            let eventTagsStr = null;
-            if (guildId) {
-                const upcomingEvents = await getUpcomingEventsForChart(guildId, chartId);
-                if (upcomingEvents && upcomingEvents.length > 0) {
-                    const now = DateTime.now();
-                    const tags = upcomingEvents.slice(0, 3).map(event => {
-                        const time = DateTime.fromISO(event.event_time).setZone(event.timezone);
-                        const isToday = time.hasSame(now, "day");
-                        const isTomorrow = time.hasSame(now.plus({ days: 1 }), "day");
-                        let dateLabel = time.toFormat("MMM d");
-                        if (isToday) dateLabel = "Today";
-                        else if (isTomorrow) dateLabel = "Tomorrow";
-
-                        // Show multi-timezone if chart has entries
-                        if (entries && entries.length > 0 && chartId) {
-                            const multiTz = formatEventForMultipleTimezones(
-                                event.event_time,
-                                event.timezone,
-                                entries.map(e => ({ label: e.label, zone: e.zone })),
-                                timeFormat
-                            );
-                            return `▸ **${event.name}** · ${dateLabel}\n${multiTz}`;
-                        } else {
-                            const timeStr = timeFormat === '12h' ? time.toFormat("h:mm a") : time.toFormat("HH:mm");
-                            return `▸ **${event.name}** · ${dateLabel} │ \`${timeStr}\``;
-                        }
-                    });
-                    eventTagsStr = tags.join("\n\n");
-                    if (upcomingEvents.length > 3) {
-                        eventTagsStr += `\n\n_+${upcomingEvents.length - 3} more events..._`;
-                    }
-                }
-            }
-
-            // Build embed
-            const embed = new EmbedBuilder()
-                .setColor(0x5865f2)
-                .setTitle(title)
-                .setFooter({ text: footer })
-                .setTimestamp();
-
-            // Build description with events and times
-            let desc = generateTimeList(entries, timeFormat, view);
-            if (eventTagsStr) {
-                desc = eventTagsStr + "\n\n───────────────\n\n" + desc;
-            }
-            embed.setDescription(desc);
-
-            // Add button controller
-            const row = new ActionRowBuilder()
-                .addComponents(
-                    new ButtonBuilder()
-                        .setCustomId(`refresh_time_${view}_${chartId || 'default'}`)
-                        .setLabel("↻ Refresh")
-                        .setStyle(ButtonStyle.Secondary),
-                    new ButtonBuilder()
-                        .setCustomId(`view_compact_${chartId || 'default'}`)
-                        .setLabel("◇ Compact")
-                        .setStyle(ButtonStyle.Secondary),
-                    new ButtonBuilder()
-                        .setCustomId(`view_detailed_${chartId || 'default'}`)
-                        .setLabel("◈ Detailed")
-                        .setStyle(ButtonStyle.Primary),
-                    new ButtonBuilder()
-                        .setCustomId(`view_grid_${chartId || 'default'}`)
-                        .setLabel("▦ Grid")
-                        .setStyle(ButtonStyle.Secondary)
-                );
-
-            await message.reply({ embeds: [embed], components: [row] });
-        } catch (error) {
-            console.error("Error handling message command:", error);
-            await message.reply("✕ An error occurred while processing your request.");
-        }
+        let requestedChartName = null;
+        if (botMentioned) requestedChartName = cleanText || null;
+        await sendTimeEmbed(message, requestedChartName);
     }
 });
 
-// Bot ready
+// ============================================
+// Bot Ready
+// ============================================
 client.once(Events.ClientReady, (c) => {
     console.log(`\n✓ Logged in as ${c.user.tag}`);
     console.log(`◈ Loaded ${client.commands.size} commands`);
@@ -563,7 +603,9 @@ client.once(Events.ClientReady, (c) => {
     console.log("○ Reminder check interval started (30s)");
 });
 
-// Handle errors
+// ============================================
+// Error Handlers
+// ============================================
 client.on('error', (error) => {
     console.error('Discord client error:', error);
 });
@@ -585,7 +627,9 @@ client.on('shardResume', (shardId, replayedEvents) => {
     console.log(`Shard ${shardId} resumed. Replayed ${replayedEvents} events.`);
 });
 
+// ============================================
 // Login
+// ============================================
 console.log('○ Checking Discord token...');
 if (!process.env.DISCORD_TOKEN || process.env.DISCORD_TOKEN === "YOUR_BOT_TOKEN_HERE") {
     console.error("✕ Error: DISCORD_TOKEN not set in .env file!");
